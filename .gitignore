@@ -1,0 +1,36 @@
+# Git & OS
+.DS_Store
+*.swp
+*.swo
+
+# External reference clones
+freqtrade-ref/
+frequi-ref/
+
+# Python & Backend
+.venv/
+rocketbot-backend/.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node & Frontend
+node_modules/
+rocketbot-ui/node_modules/
+rocketbot-ui/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment & Secrets
+.env
+*.local
+
+# Logs & Temp
+*.log
+tmp/
+.gemini/

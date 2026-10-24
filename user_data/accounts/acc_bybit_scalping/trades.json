@@ -1,0 +1,31 @@
+{
+  "open_trades": [
+    {
+      "trade_id": 1,
+      "account_id": "acc_bybit_scalping",
+      "pair": "SOL/USDT",
+      "side": "long",
+      "open_rate": 168.2,
+      "current_rate": 172.4,
+      "stake_amount": 250.0,
+      "leverage": 3.0,
+      "position_Value": 750.0,
+      "stoploss_rate": 162.0,
+      "stoploss_price": 162.0,
+      "take_profit_rate": 182.0,
+      "take_profit_price": 182.0,
+      "liquidation_rate": 118.0,
+      "liquidation_distance_pct": 31.5,
+      "dca_next_rate": 164.0,
+      "dca_target_price": 164.0,
+      "dca_count": 0,
+      "max_dca": 2,
+      "profit_pct": 2.5,
+      "profit_abs": 6.25,
+      "enter_tag": "Bybit_MicroScalp_Pullback",
+      "strategy": "ForexMeanReversionV1",
+      "open_date": "2026-10-24T06:30:38.070678+00:00"
+    }
+  ],
+  "closed_trades": []
+}

@@ -1,0 +1,36 @@
+version: '3.8'
+
+# ==============================================================================
+# RocketBot Pro - Docker Compose Multi-Servicio para Producción & Easypanel
+# ==============================================================================
+
+services:
+  # ----------------------------------------------------------------------------
+  # Opción 1 (Recomendada Easypanel): Contenedor Unificado Todo-en-Uno (Fullstack)
+  # ----------------------------------------------------------------------------
+  rocketbot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rocketbot-pro
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8090}:8090"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PORT=8090
+      - HOST=0.0.0.0
+    volumes:
+      - ./user_data:/app/user_data
+    networks:
+      - rocketbot-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8090/api/v1/overview"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+networks:
+  rocketbot-net:
+    driver: bridge

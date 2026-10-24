@@ -1,0 +1,21 @@
+{
+  "account_id": "acc_ftmo_propfirm",
+  "name": "Desaf\u00edo FTMO $100k (Oro & Forex)",
+  "account_type": "prop_firm",
+  "exchange": "oanda",
+  "trading_mode": "futures",
+  "dry_run": true,
+  "active_strategy": "CommodityTrendBreakoutV1",
+  "timeframe": "15m",
+  "starting_balance": 100000.0,
+  "leverage": 2.0,
+  "max_open_trades": 4,
+  "stake_amount": 2000.0,
+  "state": "RUNNING",
+  "prop_firm_rules": {
+    "max_daily_loss_pct": 5.0,
+    "max_total_loss_pct": 10.0,
+    "profit_target_pct": 8.0
+  },
+  "created_at": "2026-10-24T06:30:38.068891+00:00"
+}

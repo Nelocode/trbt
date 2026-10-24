@@ -1,0 +1,31 @@
+{
+  "open_trades": [
+    {
+      "trade_id": 1,
+      "account_id": "acc_spx_indices",
+      "pair": "SPX500/USD",
+      "side": "long",
+      "open_rate": 5820.0,
+      "current_rate": 5854.0,
+      "stake_amount": 2000.0,
+      "leverage": 2.0,
+      "position_Value": 4000.0,
+      "stoploss_rate": 5720.0,
+      "stoploss_price": 5720.0,
+      "take_profit_rate": 6010.0,
+      "take_profit_price": 6010.0,
+      "liquidation_rate": 3200.0,
+      "liquidation_distance_pct": 45.3,
+      "dca_next_rate": 5760.0,
+      "dca_target_price": 5760.0,
+      "dca_count": 0,
+      "max_dca": 2,
+      "profit_pct": 1.17,
+      "profit_abs": 23.4,
+      "enter_tag": "Institutional_Index_Trend",
+      "strategy": "IndexMomentumV1",
+      "open_date": "2026-10-24T06:30:38.071157+00:00"
+    }
+  ],
+  "closed_trades": []
+}

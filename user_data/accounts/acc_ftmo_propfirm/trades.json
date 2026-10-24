@@ -1,0 +1,31 @@
+{
+  "open_trades": [
+    {
+      "trade_id": 1,
+      "account_id": "acc_ftmo_propfirm",
+      "pair": "XAU/USD",
+      "side": "long",
+      "open_rate": 2718.5,
+      "current_rate": 2738.5,
+      "stake_amount": 3000.0,
+      "leverage": 2.0,
+      "position_Value": 6000.0,
+      "stoploss_rate": 2675.0,
+      "stoploss_price": 2675.0,
+      "take_profit_rate": 2820.0,
+      "take_profit_price": 2820.0,
+      "liquidation_rate": 1490.0,
+      "liquidation_distance_pct": 45.0,
+      "dca_next_rate": 2685.0,
+      "dca_target_price": 2685.0,
+      "dca_count": 0,
+      "max_dca": 2,
+      "profit_pct": 1.47,
+      "profit_abs": 44.1,
+      "enter_tag": "FTMO_Gold_Breakout_H1",
+      "strategy": "CommodityTrendBreakoutV1",
+      "open_date": "2026-10-24T06:30:38.070261+00:00"
+    }
+  ],
+  "closed_trades": []
+}

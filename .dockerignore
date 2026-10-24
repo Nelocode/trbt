@@ -1,0 +1,30 @@
+# Git & OS
+.git
+.gitignore
+.DS_Store
+*.swp
+*.swo
+
+# Node / Frontend
+rocketbot-ui/node_modules
+rocketbot-ui/dist
+rocketbot-ui/.vite
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python / Backend
+rocketbot-backend/.venv
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.coverage
+htmlcov
+
+# Logs & Temp
+*.log
+tmp/
+.gemini

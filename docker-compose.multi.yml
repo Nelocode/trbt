@@ -1,0 +1,53 @@
+version: '3.8'
+
+# ==============================================================================
+# RocketBot Pro - Docker Compose Microservicios (Frontend Nginx + Backend API)
+# ==============================================================================
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: rocketbot-backend
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PORT=8090
+      - HOST=0.0.0.0
+    volumes:
+      - ./user_data:/app/user_data
+    networks:
+      - rocketbot-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8090/api/v1/overview"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: rocketbot-ui
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - rocketbot-net
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+networks:
+  rocketbot-net:
+    driver: bridge

@@ -1,0 +1,21 @@
+{
+  "account_id": "acc_bybit_scalping",
+  "name": "Bybit Scalping Reversion ($5k)",
+  "account_type": "dry_run",
+  "exchange": "bybit",
+  "trading_mode": "futures",
+  "dry_run": true,
+  "active_strategy": "ForexMeanReversionV1",
+  "timeframe": "5m",
+  "starting_balance": 5000.0,
+  "leverage": 3.0,
+  "max_open_trades": 3,
+  "stake_amount": 250.0,
+  "state": "RUNNING",
+  "prop_firm_rules": {
+    "max_daily_loss_pct": 5.0,
+    "max_total_loss_pct": 10.0,
+    "profit_target_pct": 8.0
+  },
+  "created_at": "2026-10-24T06:30:38.069248+00:00"
+}

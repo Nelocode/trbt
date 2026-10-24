@@ -1,0 +1,182 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-black: #000000;
+    --brand-blue: #0A7CFF;
+    --brand-cyan: #00DFDF;
+    --brand-purple: #925CFF;
+    --brand-pink: #FF3B69;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #000000;
+    color: #FFFFFF;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, .font-heading {
+    font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+    letter-spacing: -0.025em;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+/* 1. Resplandor difuso ambiental superior (sin robar espacio, solo de fondo sutil) */
+.ambient-glow-top {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100vw;
+  max-width: 1400px;
+  height: 280px;
+  pointer-events: none;
+  z-index: 0;
+  background: 
+    radial-gradient(ellipse at 50% 0%, rgba(10, 124, 255, 0.22) 0%, rgba(10, 124, 255, 0) 70%),
+    radial-gradient(circle at 20% 10%, rgba(255, 59, 105, 0.12) 0%, rgba(255, 59, 105, 0) 50%),
+    radial-gradient(circle at 80% 10%, rgba(0, 223, 223, 0.15) 0%, rgba(0, 223, 223, 0) 50%);
+  filter: blur(60px);
+  opacity: 0.85;
+}
+
+/* 2. Botón Primario Figma con brillo radial interno y sombras multicapa */
+.figma-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 12px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  color: #FFFFFF;
+  background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.22) 0%, rgba(0, 0, 0, 0) 100%), #0A7CFF;
+  box-shadow: 0px 14px 28px -6px rgba(10, 124, 255, 0.48), 
+              0px 4px 8px 0px rgba(10, 124, 255, 0.16), 
+              inset 0px 1px 1px 0px rgba(255, 255, 255, 0.32);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+  border: none;
+}
+
+.figma-btn-primary:hover {
+  background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.30) 0%, rgba(0, 0, 0, 0) 100%), #1F78FF;
+  box-shadow: 0px 18px 36px -6px rgba(10, 124, 255, 0.65), 
+              inset 0px 1px 2px 0px rgba(255, 255, 255, 0.45);
+  transform: translateY(-1px);
+}
+
+/* 3. Botón Secundario con bisel y gradiente sutil */
+.figma-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 12px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  color: #EBEEF5;
+  background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 100%), rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0px 0px 0px 1px rgba(255, 255, 255, 0.09), 
+              inset 0px 1px 0px 0px rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(12px);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.figma-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0px 0px 0px 1px rgba(255, 255, 255, 0.18);
+  color: #FFFFFF;
+}
+
+/* 4. Selector de Pestañas tipo Cápsula Centrada */
+.figma-tablist-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0px 0px 0px 1px rgba(255, 255, 255, 0.08), 
+              inset 0px 1px 0px 0px rgba(255, 255, 255, 0.1);
+}
+
+.figma-tab-item {
+  padding: 6px 14px;
+  border-radius: 10px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  color: #A5ABB6;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.figma-tab-item.active {
+  background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.20) 0%, rgba(255, 255, 255, 0) 100%), rgba(10, 124, 255, 0.18);
+  color: #FFFFFF;
+  border: 1px solid rgba(10, 124, 255, 0.35);
+  box-shadow: 0px 2px 10px rgba(10, 124, 255, 0.25);
+}
+
+/* 5. Tarjetas de Cristal con bisel superior (Figma Cards) */
+.figma-card {
+  background: radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0) 70%), #0A0D14;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0px 16px 36px -10px rgba(0, 0, 0, 0.85), 
+              inset 0px 1px 0px 0px rgba(255, 255, 255, 0.12);
+}
+
+/* 6. Tagline Cápsula / Badges */
+.figma-badge-wip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* 7. Barra de Comparación en el Radar */
+.comparison-bar-without {
+  background: linear-gradient(90deg, rgba(255, 59, 105, 0.22) 0%, rgba(255, 59, 105, 0.08) 100%);
+  border: 1px solid rgba(255, 59, 105, 0.3);
+  border-radius: 8px;
+}
+
+.comparison-bar-with {
+  background: linear-gradient(90deg, rgba(10, 124, 255, 0.35) 0%, rgba(31, 120, 255, 0.18) 100%);
+  border: 1px solid rgba(10, 124, 255, 0.5);
+  border-radius: 8px;
+}
+
+/* Scrollbar fina */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: #000000;
+}
+::-webkit-scrollbar-thumb {
+  background: #1C1F26;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2D3139;
+}

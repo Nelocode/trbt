@@ -1,0 +1,21 @@
+{
+  "account_id": "acc_spx_indices",
+  "name": "Fondo Institucional \u00cdndices S&P/Nasdaq ($50k)",
+  "account_type": "client_fund",
+  "exchange": "interactive_brokers",
+  "trading_mode": "futures",
+  "dry_run": true,
+  "active_strategy": "IndexMomentumV1",
+  "timeframe": "15m",
+  "starting_balance": 50000.0,
+  "leverage": 2.0,
+  "max_open_trades": 4,
+  "stake_amount": 1500.0,
+  "state": "RUNNING",
+  "prop_firm_rules": {
+    "max_daily_loss_pct": 5.0,
+    "max_total_loss_pct": 10.0,
+    "profit_target_pct": 8.0
+  },
+  "created_at": "2026-10-24T06:30:38.069585+00:00"
+}
