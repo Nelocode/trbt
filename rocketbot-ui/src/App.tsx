@@ -50,6 +50,8 @@ import { LoginModal, type AuthUser } from './components/LoginModal';
 import { UserProfileMenu } from './components/UserProfileMenu';
 import { UserManagementModal } from './components/UserManagementModal';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
+import { ForceChangePasswordModal } from './components/ForceChangePasswordModal';
+import { ConfirmLiveCapitalModal } from './components/ConfirmLiveCapitalModal';
 
 // Auto-detección dinámica para producción en Docker, Easypanel o desarrollo local
 const getApiBase = () => {
@@ -113,6 +115,41 @@ export default function App() {
 
   const [isUserManagementOpen, setIsUserManagementOpen] = useState<boolean>(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState<boolean>(false);
+  const [isConfirmLiveOpen, setIsConfirmLiveOpen] = useState<boolean>(false);
+
+  const handleForcePasswordChanged = () => {
+    if (currentUser) {
+      const updated: AuthUser = { ...currentUser, must_change_password: false };
+      setCurrentUser(updated);
+      try {
+        localStorage.setItem('rocketbot_user', JSON.stringify(updated));
+      } catch {}
+    }
+  };
+
+  const toggleDryRunMode = () => {
+    if (portfolio.dry_run) {
+      setIsConfirmLiveOpen(true);
+    } else {
+      handleSetDryRun(true);
+    }
+  };
+
+  const handleSetDryRun = async (dryRunVal: boolean) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/bot/control`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
+        body: JSON.stringify({ dry_run: dryRunVal }),
+      });
+      if (res.ok) {
+        setPortfolio((prev: any) => ({ ...prev, dry_run: dryRunVal }));
+      }
+    } catch {}
+  };
 
   const handleLoginSuccess = (token: string, user: AuthUser) => {
     setAuthToken(token);
@@ -530,13 +567,22 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-1">
-            <span className="px-2.5 py-1.5 rounded-lg bg-white/[0.05] border border-white/[0.08] text-[#0A7CFF] text-xs font-mono font-bold">
-              {portfolio.dry_run ? 'DRY-RUN SIMULATOR' : 'LIVE CAPITAL'}
-            </span>
+            <button
+              onClick={toggleDryRunMode}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                portfolio.dry_run
+                  ? 'bg-[#0A7CFF]/15 border border-[#0A7CFF]/30 text-[#0A7CFF] hover:bg-[#0A7CFF]/25'
+                  : 'bg-[#FF3B69]/20 border border-[#FF3B69]/40 text-[#FF3B69] hover:bg-[#FF3B69]/30 shadow-[0_0_15px_rgba(255,59,105,0.3)] animate-pulse'
+              }`}
+              title="Click para alternar entre Simulador Dry-Run y Capital Real Live (requiere confirmación)"
+            >
+              <span className={`w-2 h-2 rounded-full ${portfolio.dry_run ? 'bg-[#0A7CFF]' : 'bg-[#FF3B69]'}`} />
+              <span>{portfolio.dry_run ? 'DRY-RUN SIMULATOR' : 'LIVE CAPITAL'}</span>
+            </button>
             <InfoTooltip
-              title="Modo Simulación (Dry-Run)"
-              description="Ejecuta la estrategia con precios reales y latencia en vivo pero sin arriesgar capital real del exchange."
-              impact="Permite validar que las órdenes se abren y cierran según lo esperado antes de activar fondos reales."
+              title="Modo de Ejecución (Dry-Run vs Live)"
+              description="Alterna entre el simulador de latencia cero sin riesgo de balance (Dry-Run) y la ejecución con capital real directo en exchange/broker."
+              impact="Para activar LIVE CAPITAL debes aceptar la confirmación de riesgo institucional en 2 pasos."
             />
           </div>
 
@@ -1336,6 +1382,22 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Modal Obligatorio de Cambio de Contraseña de Administrador (Solo primer inicio / una única vez - Item 1) */}
+      <ForceChangePasswordModal
+        isOpen={Boolean(currentUser && currentUser.role === 'admin' && currentUser.must_change_password)}
+        apiBase={API_BASE}
+        token={authToken}
+        onSuccess={handleForcePasswordChanged}
+      />
+
+      {/* Modal de Confirmación de 2 Pasos para Activar Capital Real (Item 8) */}
+      <ConfirmLiveCapitalModal
+        isOpen={isConfirmLiveOpen}
+        onClose={() => setIsConfirmLiveOpen(false)}
+        onConfirm={() => handleSetDryRun(false)}
+        accountName={portfolio?.name || portfolio?.account_name || activeAccountId || 'Cuenta Activa'}
+      />
 
       {/* Botón Flotante Permanente de Acceso Rápido al Mentor IA */}
       {!isAIOpen && (

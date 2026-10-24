@@ -21,10 +21,20 @@ import inspect
 import json
 import logging
 import math
+import os
 import time
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+# Garantizar zona horaria institucional UTC (Item 7)
+os.environ["TZ"] = "UTC"
+if hasattr(time, "tzset"):
+    try:
+        time.tzset()
+    except Exception:
+        pass
 
 import ccxt.async_support as ccxt_async
 import numpy as np
@@ -52,8 +62,13 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger("rocketbot")
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
-STRATEGIES_DIR = ROOT_DIR / "user_data" / "strategies"
-STRATEGIES_DIR.mkdir(parents=True, exist_ok=True)
+USER_DATA_DIR = ROOT_DIR / "user_data"
+STRATEGIES_DIR = USER_DATA_DIR / "strategies"
+ACCOUNTS_DIR = USER_DATA_DIR / "accounts"
+BACKUPS_DIR = USER_DATA_DIR / "backups"
+
+for folder in [USER_DATA_DIR, STRATEGIES_DIR, ACCOUNTS_DIR, BACKUPS_DIR]:
+    folder.mkdir(parents=True, exist_ok=True)
 
 
 # ---------------------------------------------------------------------------
@@ -1051,8 +1066,44 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def on_startup() -> None:
+    # Verificación de volumen persistente y salud de escritura (Item 3)
+    probe_file = USER_DATA_DIR / ".write_probe"
+    try:
+        probe_file.write_text("volume_ok", encoding="utf-8")
+        probe_file.unlink()
+        logger.info(f"✅ [Volume Check] Directorio persistente montado y con permisos de escritura: {USER_DATA_DIR}")
+    except Exception as e:
+        logger.critical(f"❌ [Volume Error] No se puede escribir en {USER_DATA_DIR}. Revisa permisos del volumen montado: {e}")
+
     await orchestrator.initialize()
     asyncio.create_task(background_market_loop())
+
+
+@app.get("/api/v1/system/health")
+async def system_health_check():
+    """Chequeo de salud del sistema, persistencia y estado de sincronización UTC (Item 3 & 7)."""
+    probe_ok = False
+    try:
+        probe = USER_DATA_DIR / ".health_probe"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+        probe_ok = True
+    except Exception:
+        probe_ok = False
+
+    return {
+        "status": "healthy" if probe_ok else "storage_degraded",
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "storage": {
+            "volume_path": str(USER_DATA_DIR),
+            "writable": probe_ok,
+            "accounts_count": len(multi_account_pool.accounts),
+            "backups_dir_exists": BACKUPS_DIR.exists(),
+        },
+        "bot_state": orchestrator.state,
+        "active_account": multi_account_pool.active_account_id,
+        "server_timezone": "UTC",
+    }
 
 
 async def background_market_loop() -> None:
@@ -1206,6 +1257,83 @@ async def delete_user_endpoint(user_id: str, authorization: Optional[str] = Head
 
 
 # ---------------------------------------------------------------------------
+# Endpoints de Copias de Seguridad & Respaldo Automático (Item 10 - Admin Only)
+# ---------------------------------------------------------------------------
+@app.post("/api/v1/system/backup")
+async def create_backup_endpoint(authorization: Optional[str] = Header(None)):
+    """Genera una copia de seguridad institucional comprimida (.zip) de todo user_data."""
+    require_admin(authorization)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    backup_filename = f"rocketbot_backup_{timestamp}.zip"
+    backup_path = BACKUPS_DIR / backup_filename
+
+    try:
+        with zipfile.ZipFile(backup_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+            for root, dirs, files in os.walk(USER_DATA_DIR):
+                # Evitar incluir la carpeta backups dentro de sí misma
+                if "backups" in Path(root).parts:
+                    continue
+                if "__pycache__" in dirs:
+                    dirs.remove("__pycache__")
+                for file in files:
+                    if file.startswith(".write_") or file.endswith(".tmp") or file.startswith(".health_"):
+                        continue
+                    file_path = Path(root) / file
+                    arcname = file_path.relative_to(USER_DATA_DIR)
+                    zipf.write(file_path, arcname)
+
+        size_bytes = backup_path.stat().st_size
+        logger.info(f"📦 Backup generado exitosamente: {backup_filename} ({size_bytes} bytes)")
+        return {
+            "status": "created",
+            "filename": backup_filename,
+            "size_bytes": size_bytes,
+            "size_formatted": f"{round(size_bytes / 1024, 1)} KB" if size_bytes < 1024 * 1024 else f"{round(size_bytes / (1024 * 1024), 2)} MB",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"Error generando backup institucional: {e}")
+        raise HTTPException(status_code=500, detail=f"Error creando backup: {e}")
+
+
+@app.get("/api/v1/system/backups")
+async def list_backups_endpoint(authorization: Optional[str] = Header(None)):
+    """Lista todos los respaldos generados disponibles para descarga (Solo Administradores)."""
+    require_admin(authorization)
+    backups = []
+    for f in sorted(BACKUPS_DIR.glob("rocketbot_backup_*.zip"), reverse=True):
+        st = f.stat()
+        backups.append({
+            "filename": f.name,
+            "size_bytes": st.st_size,
+            "size_formatted": f"{round(st.st_size / 1024, 1)} KB" if st.st_size < 1024 * 1024 else f"{round(st.st_size / (1024 * 1024), 2)} MB",
+            "created_at": datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).isoformat(),
+        })
+    return {"backups": backups}
+
+
+@app.get("/api/v1/system/backups/download/{filename}")
+async def download_backup_endpoint(filename: str, token: Optional[str] = None, authorization: Optional[str] = Header(None)):
+    """Descarga de forma segura un archivo de copia de seguridad (Solo Administradores)."""
+    auth_header = authorization
+    if not auth_header and token:
+        auth_header = f"Bearer {token}"
+    require_admin(auth_header)
+
+    safe_name = Path(filename).name
+    target = BACKUPS_DIR / safe_name
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="Archivo de respaldo no encontrado.")
+
+    return FileResponse(
+        path=target,
+        filename=safe_name,
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename={safe_name}"}
+    )
+
+
+# ---------------------------------------------------------------------------
 # Endpoints Sistema Multicuenta Aislado (Multi-Tenant Zero-Contamination)
 # ---------------------------------------------------------------------------
 @app.get("/api/v1/accounts")
@@ -1278,8 +1406,9 @@ async def delete_account_endpoint(account_id: str):
 
 
 @app.get("/api/v1/accounts/master-consolidated")
-async def get_master_consolidated():
-    """Devuelve la vista institucional consolidada con métricas agregadas de todas las cuentas."""
+async def get_master_consolidated(authorization: Optional[str] = Header(None)):
+    """Devuelve la vista institucional consolidada con métricas agregadas de todas las cuentas (Solo Administradores)."""
+    require_admin(authorization)
     multi_account_pool.recalculate_all_accounts(orchestrator.market.live_prices)
     return multi_account_pool.get_consolidated_master_summary()
 
@@ -1288,9 +1417,14 @@ async def get_master_consolidated():
 # Endpoints Unificados (Trading + Chart + Radar + Backtesting + Hyperopt + AI)
 # ---------------------------------------------------------------------------
 @app.get("/api/v1/overview")
-async def get_overview(account_id: Optional[str] = None):
+async def get_overview(account_id: Optional[str] = None, authorization: Optional[str] = Header(None)):
+    user = get_current_user_optional(authorization)
+    target_id = account_id or multi_account_pool.active_account_id
+    if user and not auth_manager.can_access_account(user, target_id):
+        raise HTTPException(status_code=403, detail="No tienes autorización para consultar la telemetría de esta subcuenta.")
+
     multi_account_pool.recalculate_all_accounts(orchestrator.market.live_prices)
-    acc = multi_account_pool.get_account(account_id)
+    acc = multi_account_pool.get_account(target_id)
     acc.recalculate_open_trades(orchestrator.market.live_prices)
     acc_summary = acc.get_summary()
 
@@ -1416,17 +1550,29 @@ async def get_pair_candles(
 
 
 @app.post("/api/v1/bot/control")
-async def update_bot_control(payload: BotModeUpdate):
+async def update_bot_control(payload: BotModeUpdate, authorization: Optional[str] = Header(None)):
+    user = get_current_user_optional(authorization)
+    if user and user.get("role") == "viewer":
+        raise HTTPException(status_code=403, detail="Los usuarios con rol Viewer solo tienen permisos de lectura y no pueden alterar el estado operativo del bot.")
+
+    acc = multi_account_pool.get_account()
     if payload.state:
         orchestrator.state = payload.state.upper()
+        acc.state = payload.state.upper()
     if payload.trading_mode:
         orchestrator.trading_mode = payload.trading_mode
+        acc.trading_mode = payload.trading_mode
     if payload.dry_run is not None:
         orchestrator.dry_run = payload.dry_run
+        acc.dry_run = payload.dry_run
     if payload.leverage:
         orchestrator.default_leverage = payload.leverage
+        acc.leverage = payload.leverage
     if payload.active_strategy:
         orchestrator.active_strategy_name = payload.active_strategy
+        acc.active_strategy = payload.active_strategy
+    acc.save_to_disk()
+
     if payload.exchange_name:
         await orchestrator.market.init_exchange(payload.exchange_name)
     await orchestrator.refresh_all_pairs()
@@ -1857,6 +2003,19 @@ async def dispatch_test_notification(payload: WebhookTestPayload):
 async def websocket_realtime_stream(websocket: WebSocket):
     await websocket.accept()
     account_id = websocket.query_params.get("account_id")
+    token = websocket.query_params.get("token")
+
+    # Aislamiento RBAC para WebSockets (Item 9)
+    if token:
+        payload = verify_jwt_token(token)
+        if payload and payload.get("user_id"):
+            ws_user = auth_manager.get_user_by_id(payload["user_id"])
+            if ws_user and ws_user.get("role") != "admin":
+                target_acc_id = account_id or multi_account_pool.active_account_id
+                if not auth_manager.can_access_account(ws_user, target_acc_id):
+                    await websocket.send_text(json.dumps({"type": "error", "message": "Acceso denegado a la subcuenta solicitada."}))
+                    await websocket.close(code=4403)
+                    return
     try:
         while True:
             acc = multi_account_pool.get_account(account_id)

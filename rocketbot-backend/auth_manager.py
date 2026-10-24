@@ -29,6 +29,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+# Garantizar zona horaria UTC estándar
+os.environ["TZ"] = "UTC"
+if hasattr(time, "tzset"):
+    try:
+        time.tzset()
+    except Exception:
+        pass
+
 logger = logging.getLogger("rocketbot.auth")
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -41,16 +49,21 @@ SECRET_KEY_FILE = USER_DATA_DIR / ".jwt_secret"
 def _get_or_create_jwt_secret() -> str:
     """Obtiene la clave secreta para firmar tokens JWT desde variable de entorno o disco."""
     env_secret = os.getenv("JWT_SECRET")
-    if env_secret:
-        return env_secret
+    if env_secret and len(env_secret.strip()) >= 16:
+        logger.info("🔐 JWT_SECRET institucional cargado desde variable de entorno.")
+        return env_secret.strip()
     if SECRET_KEY_FILE.exists():
         try:
-            return SECRET_KEY_FILE.read_text(encoding="utf-8").strip()
+            persisted = SECRET_KEY_FILE.read_text(encoding="utf-8").strip()
+            if persisted:
+                logger.info("🔐 JWT_SECRET persistente cargado desde disco (user_data/.jwt_secret).")
+                return persisted
         except Exception:
             pass
     secret = secrets.token_hex(32)
     try:
         SECRET_KEY_FILE.write_text(secret, encoding="utf-8")
+        logger.info("🔐 Nueva JWT_SECRET generada y guardada en user_data/.jwt_secret.")
     except Exception as e:
         logger.warning(f"No se pudo guardar jwt_secret en archivo: {e}")
     return secret
@@ -161,17 +174,39 @@ class AuthManager:
                     assigned_accounts TEXT NOT NULL DEFAULT '["*"]',
                     is_active INTEGER NOT NULL DEFAULT 1,
                     created_at TEXT NOT NULL,
-                    last_login TEXT
+                    last_login TEXT,
+                    must_change_password INTEGER NOT NULL DEFAULT 0
                 )
                 """
             )
             conn.commit()
+
+            # Migración: asegurar que la columna must_change_password exista en BD previas
+            cursor.execute("PRAGMA table_info(users)")
+            columns = [col[1] for col in cursor.fetchall()]
+            if "must_change_password" not in columns:
+                try:
+                    cursor.execute("ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0")
+                    conn.commit()
+                except Exception as e:
+                    logger.warning(f"Error agregando columna must_change_password: {e}")
 
             # Comprobar si existe al menos un usuario administrador
             cursor.execute("SELECT COUNT(*) as cnt FROM users")
             row = cursor.fetchone()
             if row["cnt"] == 0:
                 self._seed_default_admin(cursor, conn)
+            else:
+                # Si el usuario admin aún conserva la contraseña por defecto de instalación,
+                # forzar que debe cambiar la contraseña una única vez en su primer login.
+                cursor.execute("SELECT user_id, password_hash, must_change_password FROM users WHERE username = 'admin'")
+                admin_user = cursor.fetchone()
+                if admin_user:
+                    is_still_default = verify_password("RocketBotAdmin2026!", admin_user["password_hash"])
+                    if is_still_default and admin_user["must_change_password"] == 0:
+                        cursor.execute("UPDATE users SET must_change_password = 1 WHERE user_id = ?", (admin_user["user_id"],))
+                        conn.commit()
+                        logger.info("⚠️ Usuario admin detectado con clave inicial por defecto. Se activa must_change_password = 1.")
 
     def _seed_default_admin(self, cursor: sqlite3.Cursor, conn: sqlite3.Connection):
         """Siembra el usuario inicial de alta gerencia."""
@@ -183,8 +218,8 @@ class AuthManager:
 
         cursor.execute(
             """
-            INSERT INTO users (user_id, username, email, password_hash, full_name, role, assigned_accounts, is_active, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO users (user_id, username, email, password_hash, full_name, role, assigned_accounts, is_active, created_at, must_change_password)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
             """,
             (
                 default_admin_id,
@@ -199,7 +234,7 @@ class AuthManager:
             ),
         )
         conn.commit()
-        logger.info(f"Usuario Administrador inicial creado: '{default_user}' con contraseña por defecto.")
+        logger.info(f"Usuario Administrador inicial creado: '{default_user}' con clave temporal obligatoria de cambio.")
 
     def authenticate_user(self, username_or_email: str, password: str) -> Optional[Dict[str, Any]]:
         """Valida credenciales y actualiza la última fecha de inicio de sesión."""
@@ -347,11 +382,12 @@ class AuthManager:
             if not verify_password(current_password, row["password_hash"]):
                 return False
 
-            if len(new_password) < 6:
-                raise ValueError("La nueva contraseña debe tener al menos 6 caracteres.")
+            if len(new_password) < 8:
+                raise ValueError("La nueva contraseña debe tener al menos 8 caracteres para cumplir las políticas de seguridad.")
 
             new_hash = hash_password(new_password)
-            cursor.execute("UPDATE users SET password_hash = ? WHERE user_id = ?", (new_hash, user_id))
+            # Al cambiar la contraseña exitosamente, se retira la obligación de cambio (must_change_password = 0)
+            cursor.execute("UPDATE users SET password_hash = ?, must_change_password = 0 WHERE user_id = ?", (new_hash, user_id))
             conn.commit()
             return True
 
@@ -403,6 +439,7 @@ class AuthManager:
         except Exception:
             d["assigned_accounts"] = ["*"]
         d["is_active"] = bool(d.get("is_active", 1))
+        d["must_change_password"] = bool(d.get("must_change_password", 0))
         return d
 
 

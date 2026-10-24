@@ -44,16 +44,17 @@ COPY --from=frontend-builder /app/rocketbot-ui/dist /app/dist
 ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app/rocketbot-backend \
     PORT=8090 \
-    HOST=0.0.0.0
+    HOST=0.0.0.0 \
+    TZ=UTC
 
-# Volumen persistente para cuentas aisladas, estrategias y datos de mercado
+# Volumen persistente para cuentas aisladas, usuarios, estrategias y backups
 VOLUME ["/app/user_data"]
 
 EXPOSE 8090
 
-# Verificación de salud (Healthcheck)
+# Verificación de salud estricta (Healthcheck con validación de persistencia y UTC)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD curl -f http://127.0.0.1:${PORT:-8090}/api/v1/overview || exit 1
+    CMD curl -f http://127.0.0.1:${PORT:-8090}/api/v1/system/health || exit 1
 
 # Iniciar servidor unificado (FastAPI atiende API, WebSockets y frontend SPA)
 CMD ["sh", "-c", "uvicorn server:app --host ${HOST:-0.0.0.0} --port ${PORT:-8090} --workers 1"]

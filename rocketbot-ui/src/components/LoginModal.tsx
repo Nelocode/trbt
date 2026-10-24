@@ -21,6 +21,7 @@ export interface AuthUser {
   is_active: boolean;
   created_at: string;
   last_login?: string;
+  must_change_password?: boolean;
 }
 
 interface LoginModalProps {

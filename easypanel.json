@@ -2,7 +2,7 @@
   "$schema": "https://easypanel.io/schema.json",
   "name": "RocketBot Pro",
   "description": "Plataforma institucional de trading cuantitativo multi-activo, con motor multicuenta aislado, auditor de riesgo IA (Prof. Quant Alpha), simulación Monte Carlo 10k y radar de confluencia en vivo.",
-  "instructions": "1. Mapea el volumen persistente '/app/user_data' para conservar tus cuentas, balances y estrategias ante reinicios.\n2. En la sección Dominios de Easypanel, añade tu dominio (ej: bot.tudominio.com) apuntando al puerto del contenedor 8090.\n3. Habilita HTTPS automático con Let's Encrypt.",
+  "instructions": "1. Mapea el volumen persistente montando 'rocketbot_data' en '/app/user_data' (imprescindible para persistencia de usuarios, subcuentas aisladas y copias de seguridad).\n2. Configura las variables de entorno: TZ=UTC y JWT_SECRET (mínimo 32 caracteres seguros).\n3. En Dominios, asigna tu subdominio con SSL/HTTPS automático apuntando al puerto 8090.\n4. Asigna límites recomendados: 2 CPUs y 2048 MB de RAM.",
   "services": [
     {
       "type": "app",
@@ -28,7 +28,7 @@
             "mountPath": "/app/user_data"
           }
         ],
-        "env": "PYTHONUNBUFFERED=1\nPORT=8090\nHOST=0.0.0.0"
+        "env": "PYTHONUNBUFFERED=1\nPORT=8090\nHOST=0.0.0.0\nTZ=UTC\nJWT_SECRET="
       }
     }
   ]

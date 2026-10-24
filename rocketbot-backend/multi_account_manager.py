@@ -681,6 +681,19 @@ class MultiAccountPool:
                     except Exception as e:
                         logger.error(f"Error cargando cuenta {dir_path.name}: {e}")
 
+        # Bloqueo de seguridad institucional (Item 8):
+        # Al arrancar el servidor o reiniciar el contenedor, TODAS las cuentas inician en dry_run = True.
+        # Esto previene ejecuciones de capital real desatendidas tras reinicios automáticos de Docker.
+        allow_live_startup = os.getenv("ALLOW_STARTUP_LIVE", "0").strip() in ["1", "true", "TRUE"]
+        if not allow_live_startup:
+            for acc in self.accounts.values():
+                if not acc.dry_run:
+                    acc.dry_run = True
+                    acc.save_to_disk()
+            logger.info("🛡️ Safety Lock Activo: Todas las subcuentas se aseguran en modo DRY-RUN SIMULATOR al arranque.")
+        else:
+            logger.warning("⚠️ ALLOW_STARTUP_LIVE activo: Las cuentas conservan su configuración previa de Live Capital.")
+
     def get_account(self, account_id: Optional[str] = None) -> AccountInstance:
         """Obtiene la instancia de la cuenta solicitada o la cuenta activa actual."""
         target_id = account_id or self.active_account_id
