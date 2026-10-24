@@ -72,12 +72,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, apiBase, onLogin
     }
   };
 
-  const fillDefaultAdmin = () => {
-    setUsername('admin');
-    setPassword('RocketBotAdmin2026!');
-    setErrorMsg('');
-  };
-
   return (
     <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl animate-in fade-in duration-300">
       <div className="w-full max-w-md bg-[#0C101A] border border-white/[0.12] rounded-3xl shadow-[0_20px_80px_rgba(0,0,0,0.9)] overflow-hidden flex flex-col relative">
@@ -166,30 +160,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, apiBase, onLogin
               </>
             )}
           </button>
-
-          {/* Acceso Rápido / Credenciales Iniciales */}
-          <div className="pt-3 border-t border-white/[0.08]">
-            <button
-              type="button"
-              onClick={fillDefaultAdmin}
-              className="w-full p-2.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.06] hover:border-white/[0.15] text-left transition flex items-center justify-between group cursor-pointer"
-            >
-              <div className="flex items-center gap-2">
-                <KeyRound className="w-4 h-4 text-[#00DFDF]" />
-                <div>
-                  <span className="text-[11px] font-bold text-white font-heading block">
-                    Usar Credenciales de Administrador
-                  </span>
-                  <span className="text-[9px] font-mono text-[#8E95A2]">
-                    admin • RocketBotAdmin2026!
-                  </span>
-                </div>
-              </div>
-              <span className="text-[10px] text-[#0A7CFF] font-mono font-bold group-hover:translate-x-0.5 transition">
-                Rellenar ➔
-              </span>
-            </button>
-          </div>
         </form>
 
         {/* Footer */}
