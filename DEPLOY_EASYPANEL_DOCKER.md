@@ -59,6 +59,30 @@ Para que tus cuentas aisladas, estrategias generadas por IA y el historial de op
 
 ---
 
+## 🔐 Credenciales Iniciales y Gestión de Usuarios (RBAC)
+
+Al desplegar por primera vez, el sistema inicializa una base de datos SQLite segura en `user_data/users.db` con un usuario Administrador por defecto:
+
+* **Usuario:** `admin`
+* **Contraseña inicial:** `RocketBotAdmin2026!`
+
+*(Puedes hacer clic en el botón de auto-rellenado en la pantalla de inicio de sesión o ingresar tus credenciales directamente).*
+
+### Roles y Permisos de Acceso:
+1. **`ADMIN` (Administrador)**:
+   - Control total de la plataforma.
+   - Acceso a todas las subcuentas y a la Vista Master MAM.
+   - Puede crear nuevos usuarios, cambiar contraseñas, asignar subcuentas específicas y bloquear accesos.
+2. **`TRADER` (Operador)**:
+   - Acceso restringido exclusivamente a las subcuentas que el Administrador le haya asignado.
+   - Puede operar, abrir y cerrar trades dentro de sus subcuentas asignadas.
+3. **`VIEWER` (Solo Lectura)**:
+   - Solo puede monitorear la telemetría, gráficos y radar. El sistema le impide abrir o liquidar operaciones.
+
+Para gestionar usuarios o cambiar tu contraseña, haz clic en el menú de usuario en la esquina superior derecha (`admin (ADMIN) ▾`).
+
+---
+
 ## 🐳 Método 2: Despliegue con Docker Compose en Easypanel
 
 Si prefieres usar la función Compose de Easypanel:

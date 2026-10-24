@@ -29,6 +29,10 @@ yarn-error.log*
 # Environment & Secrets
 .env
 *.local
+.jwt_secret
+*.db
+*.sqlite
+*.sqlite3
 
 # Logs & Temp
 *.log

@@ -42,6 +42,7 @@ interface AccountSwitcherDropdownProps {
   apiBase: string;
   activeAccountId: string;
   isPrivacyMode: boolean;
+  token?: string;
   onAccountSwitched: (accountId: string, accountData: AccountSummary) => void;
   onOpenNewAccountModal: () => void;
   onOpenMasterModal: () => void;
@@ -51,6 +52,7 @@ export const AccountSwitcherDropdown: React.FC<AccountSwitcherDropdownProps> = (
   apiBase,
   activeAccountId,
   isPrivacyMode,
+  token,
   onAccountSwitched,
   onOpenNewAccountModal,
   onOpenMasterModal,
@@ -62,7 +64,9 @@ export const AccountSwitcherDropdown: React.FC<AccountSwitcherDropdownProps> = (
 
   const fetchAccounts = async () => {
     try {
-      const res = await fetch(`${apiBase}/api/v1/accounts`);
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch(`${apiBase}/api/v1/accounts`, { headers });
       if (res.ok) {
         const data = await res.json();
         setAccounts(data.accounts || []);
@@ -96,9 +100,11 @@ export const AccountSwitcherDropdown: React.FC<AccountSwitcherDropdownProps> = (
     }
     setIsLoading(true);
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
       const res = await fetch(`${apiBase}/api/v1/accounts/switch`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ account_id: accId }),
       });
       if (res.ok) {
@@ -118,8 +124,11 @@ export const AccountSwitcherDropdown: React.FC<AccountSwitcherDropdownProps> = (
     e.stopPropagation();
     if (!confirm('¿Estás seguro de eliminar esta subcuenta? Sus operaciones y saldo aislado serán archivados.')) return;
     try {
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
       const res = await fetch(`${apiBase}/api/v1/accounts/${accId}`, {
         method: 'DELETE',
+        headers,
       });
       if (res.ok) {
         const json = await res.json();

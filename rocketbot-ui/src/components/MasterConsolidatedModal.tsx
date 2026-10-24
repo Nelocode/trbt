@@ -19,6 +19,7 @@ interface MasterConsolidatedModalProps {
   onClose: () => void;
   apiBase: string;
   isPrivacyMode: boolean;
+  token?: string;
   onSelectAccount: (accountId: string) => void;
 }
 
@@ -41,6 +42,7 @@ export const MasterConsolidatedModal: React.FC<MasterConsolidatedModalProps> = (
   onClose,
   apiBase,
   isPrivacyMode,
+  token,
   onSelectAccount,
 }) => {
   const [data, setData] = useState<ConsolidatedData | null>(null);
@@ -50,7 +52,9 @@ export const MasterConsolidatedModal: React.FC<MasterConsolidatedModalProps> = (
   const fetchConsolidated = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`${apiBase}/api/v1/accounts/master-consolidated`);
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch(`${apiBase}/api/v1/accounts/master-consolidated`, { headers });
       if (res.ok) {
         const json = await res.json();
         setData(json);

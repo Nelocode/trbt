@@ -16,6 +16,7 @@ interface NewAccountModalProps {
   isOpen: boolean;
   onClose: () => void;
   apiBase: string;
+  token?: string;
   onAccountCreated: (account: AccountSummary) => void;
 }
 
@@ -23,6 +24,7 @@ export const NewAccountModal: React.FC<NewAccountModalProps> = ({
   isOpen,
   onClose,
   apiBase,
+  token,
   onAccountCreated,
 }) => {
   const [name, setName] = useState('');
@@ -79,9 +81,12 @@ export const NewAccountModal: React.FC<NewAccountModalProps> = ({
             : undefined,
       };
 
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch(`${apiBase}/api/v1/accounts`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(payload),
       });
 

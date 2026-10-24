@@ -29,7 +29,7 @@ from typing import Any, Dict, List, Optional
 import ccxt.async_support as ccxt_async
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -44,6 +44,7 @@ from quant_risk_engine import (
     WebhookNotificationDispatcher,
 )
 from multi_account_manager import multi_account_pool
+from auth_manager import auth_manager, create_jwt_token, verify_jwt_token
 
 circuit_breaker = CircuitBreakerEngine(max_daily_loss_pct=4.0, max_consecutive_losses=3)
 
@@ -58,6 +59,37 @@ STRATEGIES_DIR.mkdir(parents=True, exist_ok=True)
 # ---------------------------------------------------------------------------
 # Modelos de Peticiones API
 # ---------------------------------------------------------------------------
+class LoginPayload(BaseModel):
+    username: str
+    password: str
+
+
+class RegisterUserPayload(BaseModel):
+    username: str
+    email: str
+    password: str
+    full_name: Optional[str] = None
+    role: str = "trader"
+    assigned_accounts: Optional[List[str]] = None
+
+
+class UpdateUserPayload(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    role: Optional[str] = None
+    assigned_accounts: Optional[List[str]] = None
+    is_active: Optional[bool] = None
+
+
+class ChangePasswordPayload(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class AdminResetPasswordPayload(BaseModel):
+    new_password: str
+
+
 class SwitchAccountPayload(BaseModel):
     account_id: str
 
@@ -1034,21 +1066,178 @@ async def background_market_loop() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Dependencias y Helpers de Seguridad y Autenticación RBAC
+# ---------------------------------------------------------------------------
+def get_current_user_optional(authorization: Optional[str] = Header(None)) -> Optional[Dict[str, Any]]:
+    if not authorization:
+        return None
+    parts = authorization.split()
+    if len(parts) == 2 and parts[0].lower() == "bearer":
+        token = parts[1]
+        payload = verify_jwt_token(token)
+        if payload and payload.get("user_id"):
+            return auth_manager.get_user_by_id(payload["user_id"])
+    return None
+
+
+def get_current_user(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
+    user = get_current_user_optional(authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="No autorizado. Inicia sesión con tus credenciales.")
+    if not user.get("is_active"):
+        raise HTTPException(status_code=403, detail="Cuenta desactivada. Contacta al administrador.")
+    return user
+
+
+def require_admin(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
+    user = get_current_user(authorization)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Acceso denegado. Se requieren permisos de Administrador.")
+    return user
+
+
+# ---------------------------------------------------------------------------
+# Endpoints de Autenticación & Control de Acceso (JWT / RBAC)
+# ---------------------------------------------------------------------------
+@app.post("/api/v1/auth/login")
+async def login_endpoint(payload: LoginPayload):
+    """Inicia sesión y genera un token JWT firmado de 7 días."""
+    user = auth_manager.authenticate_user(payload.username, payload.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos.")
+
+    token = create_jwt_token(user)
+    return {
+        "status": "authenticated",
+        "access_token": token,
+        "token_type": "bearer",
+        "user": user,
+    }
+
+
+@app.get("/api/v1/auth/me")
+async def get_my_profile(authorization: Optional[str] = Header(None)):
+    """Devuelve los datos del perfil del usuario actualmente autenticado."""
+    user = get_current_user(authorization)
+    return {"user": user}
+
+
+@app.post("/api/v1/auth/change-password")
+async def change_password_endpoint(payload: ChangePasswordPayload, authorization: Optional[str] = Header(None)):
+    """Permite al usuario conectado cambiar su propia contraseña."""
+    user = get_current_user(authorization)
+    try:
+        ok = auth_manager.change_password(user["user_id"], payload.current_password, payload.new_password)
+        if not ok:
+            raise HTTPException(status_code=400, detail="La contraseña actual no es correcta.")
+        return {"status": "password_changed", "message": "Contraseña actualizada exitosamente."}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/v1/auth/users")
+async def list_all_users_endpoint(authorization: Optional[str] = Header(None)):
+    """Lista todos los usuarios registrados (Solo Administradores)."""
+    require_admin(authorization)
+    return {"users": auth_manager.list_users()}
+
+
+@app.post("/api/v1/auth/users")
+async def create_user_endpoint(payload: RegisterUserPayload, authorization: Optional[str] = Header(None)):
+    """Crea un nuevo usuario en el sistema (Solo Administradores)."""
+    require_admin(authorization)
+    try:
+        new_user = auth_manager.create_user(
+            username=payload.username,
+            email=payload.email,
+            password=payload.password,
+            full_name=payload.full_name or "",
+            role=payload.role,
+            assigned_accounts=payload.assigned_accounts,
+        )
+        return {"status": "created", "user": new_user}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.put("/api/v1/auth/users/{user_id}")
+async def update_user_endpoint(user_id: str, payload: UpdateUserPayload, authorization: Optional[str] = Header(None)):
+    """Actualiza datos, rol o subcuentas asignadas de un usuario (Solo Administradores)."""
+    require_admin(authorization)
+    updated = auth_manager.update_user(
+        user_id=user_id,
+        full_name=payload.full_name,
+        email=payload.email,
+        role=payload.role,
+        assigned_accounts=payload.assigned_accounts,
+        is_active=payload.is_active,
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+    return {"status": "updated", "user": updated}
+
+
+@app.post("/api/v1/auth/users/{user_id}/reset-password")
+async def admin_reset_password_endpoint(
+    user_id: str, payload: AdminResetPasswordPayload, authorization: Optional[str] = Header(None)
+):
+    """Resetea la contraseña de un usuario (Solo Administradores)."""
+    require_admin(authorization)
+    try:
+        ok = auth_manager.admin_reset_password(user_id, payload.new_password)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+        return {"status": "password_reset", "message": "Contraseña restablecida exitosamente."}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.delete("/api/v1/auth/users/{user_id}")
+async def delete_user_endpoint(user_id: str, authorization: Optional[str] = Header(None)):
+    """Elimina un usuario del sistema (Solo Administradores)."""
+    require_admin(authorization)
+    try:
+        ok = auth_manager.delete_user(user_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+        return {"status": "deleted", "message": "Usuario eliminado exitosamente."}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
 # Endpoints Sistema Multicuenta Aislado (Multi-Tenant Zero-Contamination)
 # ---------------------------------------------------------------------------
 @app.get("/api/v1/accounts")
-async def list_accounts():
-    """Devuelve la lista completa de cuentas aisladas y la cuenta activa actual."""
+async def list_accounts(authorization: Optional[str] = Header(None)):
+    """Devuelve la lista completa de cuentas aisladas permitidas para el usuario."""
     multi_account_pool.recalculate_all_accounts(orchestrator.market.live_prices)
+    all_accounts = multi_account_pool.list_accounts_summary()
+
+    user = get_current_user_optional(authorization)
+    if user and user.get("role") != "admin":
+        filtered = [a for a in all_accounts if auth_manager.can_access_account(user, a["account_id"])]
+        active_id = multi_account_pool.active_account_id
+        if not any(a["account_id"] == active_id for a in filtered) and filtered:
+            active_id = filtered[0]["account_id"]
+        return {
+            "active_account_id": active_id,
+            "accounts": filtered,
+        }
+
     return {
         "active_account_id": multi_account_pool.active_account_id,
-        "accounts": multi_account_pool.list_accounts_summary(),
+        "accounts": all_accounts,
     }
 
 
 @app.post("/api/v1/accounts/switch")
-async def switch_account(payload: SwitchAccountPayload):
-    """Cambia la cuenta activa actual en el sistema."""
+async def switch_account(payload: SwitchAccountPayload, authorization: Optional[str] = Header(None)):
+    """Cambia la cuenta activa actual en el sistema verificando permisos RBAC."""
+    user = get_current_user_optional(authorization)
+    if user and not auth_manager.can_access_account(user, payload.account_id):
+        raise HTTPException(status_code=403, detail="No tienes permiso para acceder a esta subcuenta.")
+
     if payload.account_id not in multi_account_pool.accounts:
         raise HTTPException(status_code=404, detail="Cuenta no encontrada.")
     multi_account_pool.active_account_id = payload.account_id
@@ -1245,7 +1434,15 @@ async def update_bot_control(payload: BotModeUpdate):
 
 
 @app.post("/api/v1/trade/force-enter")
-async def force_enter_trade(payload: ForceEnterPayload):
+async def force_enter_trade(payload: ForceEnterPayload, authorization: Optional[str] = Header(None)):
+    user = get_current_user_optional(authorization)
+    if user:
+        if user.get("role") == "viewer":
+            raise HTTPException(status_code=403, detail="Los usuarios con rol Viewer solo tienen acceso de lectura.")
+        target_id = payload.account_id or multi_account_pool.active_account_id
+        if not auth_manager.can_access_account(user, target_id):
+            raise HTTPException(status_code=403, detail="No tienes permiso para operar en esta subcuenta.")
+
     acc = multi_account_pool.get_account(payload.account_id)
     price = orchestrator.market.live_prices.get(payload.pair)
     if not price:
@@ -1270,7 +1467,11 @@ async def force_enter_trade(payload: ForceEnterPayload):
 
 
 @app.post("/api/v1/trade/force-exit")
-async def force_exit_trade(payload: ForceExitPayload):
+async def force_exit_trade(payload: ForceExitPayload, authorization: Optional[str] = Header(None)):
+    user = get_current_user_optional(authorization)
+    if user and user.get("role") == "viewer":
+        raise HTTPException(status_code=403, detail="Los usuarios con rol Viewer solo tienen acceso de lectura.")
+
     acc = multi_account_pool.get_account(payload.account_id)
     target_acc = acc
     if not any(t["trade_id"] == payload.trade_id for t in target_acc.open_trades):
@@ -1283,6 +1484,9 @@ async def force_exit_trade(payload: ForceExitPayload):
     if not trade:
         raise HTTPException(status_code=404, detail=f"Trade #{payload.trade_id} no encontrado en ninguna cuenta.")
 
+    if user and not auth_manager.can_access_account(user, target_acc.account_id):
+        raise HTTPException(status_code=403, detail="No tienes permiso para operar en esta subcuenta.")
+
     price = orchestrator.market.live_prices.get(trade["pair"], trade.get("current_rate", trade["open_rate"]))
     try:
         closed = target_acc.force_exit_trade(payload.trade_id, price, reason=payload.reason)
@@ -1292,7 +1496,11 @@ async def force_exit_trade(payload: ForceExitPayload):
 
 
 @app.post("/api/v1/trade/update-levels")
-async def update_trade_levels(payload: UpdateTradeLevelsPayload):
+async def update_trade_levels(payload: UpdateTradeLevelsPayload, authorization: Optional[str] = Header(None)):
+    user = get_current_user_optional(authorization)
+    if user and user.get("role") == "viewer":
+        raise HTTPException(status_code=403, detail="Los usuarios con rol Viewer solo tienen acceso de lectura.")
+
     acc = multi_account_pool.get_account(payload.account_id)
     target_acc = acc
     trade = next((t for t in target_acc.open_trades if t["trade_id"] == payload.trade_id), None)

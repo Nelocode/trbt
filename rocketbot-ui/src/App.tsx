@@ -46,6 +46,10 @@ import { TelegramDiscordModal } from './components/TelegramDiscordModal';
 import { AccountSwitcherDropdown, type AccountSummary } from './components/AccountSwitcherDropdown';
 import { NewAccountModal } from './components/NewAccountModal';
 import { MasterConsolidatedModal } from './components/MasterConsolidatedModal';
+import { LoginModal, type AuthUser } from './components/LoginModal';
+import { UserProfileMenu } from './components/UserProfileMenu';
+import { UserManagementModal } from './components/UserManagementModal';
+import { ChangePasswordModal } from './components/ChangePasswordModal';
 
 // Auto-detección dinámica para producción en Docker, Easypanel o desarrollo local
 const getApiBase = () => {
@@ -88,6 +92,64 @@ export default function App() {
   });
   const [isNewAccountModalOpen, setIsNewAccountModalOpen] = useState<boolean>(false);
   const [isMasterModalOpen, setIsMasterModalOpen] = useState<boolean>(false);
+
+  // Autenticación JWT y Roles RBAC
+  const [authToken, setAuthToken] = useState<string>(() => {
+    try {
+      return localStorage.getItem('rocketbot_jwt_token') || '';
+    } catch {
+      return '';
+    }
+  });
+
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
+    try {
+      const saved = localStorage.getItem('rocketbot_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [isUserManagementOpen, setIsUserManagementOpen] = useState<boolean>(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState<boolean>(false);
+
+  const handleLoginSuccess = (token: string, user: AuthUser) => {
+    setAuthToken(token);
+    setCurrentUser(user);
+    try {
+      localStorage.setItem('rocketbot_jwt_token', token);
+      localStorage.setItem('rocketbot_user', JSON.stringify(user));
+    } catch {}
+  };
+
+  const handleLogout = () => {
+    setAuthToken('');
+    setCurrentUser(null);
+    try {
+      localStorage.removeItem('rocketbot_jwt_token');
+      localStorage.removeItem('rocketbot_user');
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (authToken) {
+      fetch(`${API_BASE}/api/v1/auth/me`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      })
+        .then((res) => {
+          if (res.ok) return res.json();
+          throw new Error('Unauthorized');
+        })
+        .then((data) => {
+          setCurrentUser(data.user);
+          localStorage.setItem('rocketbot_user', JSON.stringify(data.user));
+        })
+        .catch(() => {
+          handleLogout();
+        });
+    }
+  }, [authToken]);
 
   const [activeTab, setActiveTab] = useState<'terminal' | 'lab' | 'freqai'>('terminal');
   const [isTourOpen, setIsTourOpen] = useState<boolean>(false);
@@ -209,7 +271,13 @@ export default function App() {
 
   const fetchOverview = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/v1/overview?account_id=${encodeURIComponent(activeAccountId)}`);
+      const headers: Record<string, string> = {};
+      if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+      const res = await fetch(`${API_BASE}/api/v1/overview?account_id=${encodeURIComponent(activeAccountId)}`, { headers });
+      if (res.status === 401) {
+        handleLogout();
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         setPortfolio(data.portfolio);
@@ -219,13 +287,13 @@ export default function App() {
         setFreqaiPredictions(data.freqai_predictions || []);
       }
       try {
-        const kRes = await fetch(`${API_BASE}/api/v1/risk/kelly-sizing`);
+        const kRes = await fetch(`${API_BASE}/api/v1/risk/kelly-sizing`, { headers });
         if (kRes.ok) setKellyData(await kRes.json());
       } catch {}
     } catch {
       // ignore
     }
-  }, [activeAccountId]);
+  }, [activeAccountId, authToken]);
 
   const fetchPairCandles = useCallback(async (pair: string, tf: string) => {
     try {
@@ -409,6 +477,7 @@ export default function App() {
               apiBase={API_BASE}
               activeAccountId={activeAccountId}
               isPrivacyMode={isPrivacyMode}
+              token={authToken}
               onAccountSwitched={handleAccountSwitched}
               onOpenNewAccountModal={() => setIsNewAccountModalOpen(true)}
               onOpenMasterModal={() => setIsMasterModalOpen(true)}
@@ -589,6 +658,16 @@ export default function App() {
               <Download className="w-3.5 h-3.5 text-[#00DFDF]" />
               <span className="hidden sm:inline">Manual PDF</span>
             </a>
+
+            {/* Menú de Usuario / Perfil RBAC */}
+            {currentUser && (
+              <UserProfileMenu
+                user={currentUser}
+                onOpenUserManagement={() => setIsUserManagementOpen(true)}
+                onOpenChangePassword={() => setIsChangePasswordOpen(true)}
+                onLogout={handleLogout}
+              />
+            )}
           </div>
         </div>
       </header>
@@ -1186,6 +1265,7 @@ export default function App() {
         isOpen={isNewAccountModalOpen}
         onClose={() => setIsNewAccountModalOpen(false)}
         apiBase={API_BASE}
+        token={authToken}
         onAccountCreated={(account) => handleAccountSwitched(account.account_id, account)}
       />
 
@@ -1195,8 +1275,36 @@ export default function App() {
         onClose={() => setIsMasterModalOpen(false)}
         apiBase={API_BASE}
         isPrivacyMode={isPrivacyMode}
+        token={authToken}
         onSelectAccount={(accId) => handleAccountSwitched(accId)}
       />
+
+      {/* Modal de Inicio de Sesión Institucional (Bloquea si no hay token) */}
+      <LoginModal
+        isOpen={!authToken || !currentUser}
+        apiBase={API_BASE}
+        onLoginSuccess={handleLoginSuccess}
+      />
+
+      {/* Modal de Gestión de Usuarios y Permisos RBAC (Solo Administradores) */}
+      {currentUser && currentUser.role === 'admin' && (
+        <UserManagementModal
+          isOpen={isUserManagementOpen}
+          onClose={() => setIsUserManagementOpen(false)}
+          apiBase={API_BASE}
+          token={authToken}
+        />
+      )}
+
+      {/* Modal de Cambio de Contraseña */}
+      {currentUser && (
+        <ChangePasswordModal
+          isOpen={isChangePasswordOpen}
+          onClose={() => setIsChangePasswordOpen(false)}
+          apiBase={API_BASE}
+          token={authToken}
+        />
+      )}
 
       {/* Modal de Confirmación de Kill-Switch de Emergencia */}
       {isPanicConfirmOpen && (
