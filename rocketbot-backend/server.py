@@ -356,6 +356,7 @@ class MarketDataEngine:
         self.volume_24h: Dict[str, float] = {p: 0.0 for p in self.PAIRS}
         self.data_source: str = "initializing"
         self._rng = np.random.default_rng(42)
+        self._rate_limiter: asyncio.Semaphore = asyncio.Semaphore(2)
 
     async def init_exchange(self, exchange_name: str = "binance") -> None:
         self.exchange_name = exchange_name
@@ -374,7 +375,11 @@ class MarketDataEngine:
 
         try:
             assert self.exchange is not None
-            raw = await self.exchange.fetch_ohlcv(pair, timeframe=timeframe, limit=limit)
+            async with self._rate_limiter:
+                raw = await asyncio.wait_for(
+                    self.exchange.fetch_ohlcv(pair, timeframe=timeframe, limit=limit),
+                    timeout=5.0
+                )
             if raw and len(raw) >= 50:
                 df = pd.DataFrame(
                     raw, columns=["timestamp", "open", "high", "low", "close", "volume"]
@@ -740,100 +745,107 @@ class RocketBotOrchestrator:
             t["liquidation_distance_pct"] = round(dist_liq, 1)
 
     async def refresh_all_pairs(self) -> None:
-        for pair in self.market.PAIRS:
-            pair_meta = self.market.PAIR_METADATA.get(pair, {})
-            strat_name = pair_meta.get("strategy", self.active_strategy_name)
-            try:
-                strat = StrategyLoader.load_instance(strat_name)
-            except Exception:
-                strat = StrategyLoader.load_instance("RocketMultiFactorV1")
-                strat_name = "RocketMultiFactorV1"
+        sem = asyncio.Semaphore(2)
 
-            df = await self.market.fetch_pair_ohlcv(pair, getattr(strat, "timeframe", self.timeframe), limit=260)
-            df = strat.populate_indicators(df, {"pair": pair})
-            df = strat.populate_entry_trend(df, {"pair": pair})
-            df = strat.populate_exit_trend(df, {"pair": pair})
-            self.analyzed_dfs[f"{pair}:{self.timeframe}"] = df
+        async def _evaluate_single_pair(pair: str) -> None:
+            async with sem:
+                try:
+                    pair_meta = self.market.PAIR_METADATA.get(pair, {})
+                    strat_name = pair_meta.get("strategy", self.active_strategy_name)
+                    try:
+                        strat = StrategyLoader.load_instance(strat_name)
+                    except Exception:
+                        strat = StrategyLoader.load_instance("RocketMultiFactorV1")
+                        strat_name = "RocketMultiFactorV1"
 
-            ai_pred = self.freqai.evaluate_pair(pair, df)
-            last = df.iloc[-1]
+                    df = await self.market.fetch_pair_ohlcv(pair, getattr(strat, "timeframe", self.timeframe), limit=260)
+                    df = strat.populate_indicators(df, {"pair": pair})
+                    df = strat.populate_entry_trend(df, {"pair": pair})
+                    df = strat.populate_exit_trend(df, {"pair": pair})
+                    self.analyzed_dfs[f"{pair}:{self.timeframe}"] = df
 
-            # Construir diagnóstico de condiciones según la clase de activo
-            close_val = float(last["close"])
-            ema200_val = float(last.get("ema_200", close_val))
-            rsi_val = float(last.get("rsi", 50.0))
-            bb_pct_val = float(last.get("bb_percent", 0.5))
-            rvol_val = float(last.get("rvol", 1.0))
-            adx_val = float(last.get("adx", 20.0))
-            macd_rising = bool(last.get("macdhist", 0) > df["macdhist"].iloc[-2]) if len(df) > 2 else False
+                    ai_pred = self.freqai.evaluate_pair(pair, df)
+                    last = df.iloc[-1]
 
-            buy_rsi_thr = getattr(strat, "buy_rsi_threshold", None)
-            rsi_target = buy_rsi_thr.value if buy_rsi_thr else 34
-            buy_bb_thr = getattr(strat, "buy_bb_percent", None)
-            bb_target = buy_bb_thr.value if buy_bb_thr else 0.15
+                    # Construir diagnóstico de condiciones según la clase de activo
+                    close_val = float(last["close"])
+                    ema200_val = float(last.get("ema_200", close_val))
+                    rsi_val = float(last.get("rsi", 50.0))
+                    bb_pct_val = float(last.get("bb_percent", 0.5))
+                    rvol_val = float(last.get("rvol", 1.0))
+                    adx_val = float(last.get("adx", 20.0))
+                    macd_rising = bool(last.get("macdhist", 0) > df["macdhist"].iloc[-2]) if len(df) > 2 else False
 
-            cat = pair_meta.get("category", "crypto")
-            if cat == "commodity":
-                conditions = [
-                    {"name": "Tendencia Macro (Close > EMA200)", "passed": close_val > ema200_val, "current": f"{close_val:.2f} vs {ema200_val:.2f}"},
-                    {"name": "Ruptura Canales Donchian", "passed": close_val >= float(last.get("donchian_high", close_val)), "current": "Ruptura Alta" if close_val >= float(last.get("donchian_high", close_val)) else "En Rango"},
-                    {"name": "Fuerza Tendencial ADX (>= 22)", "passed": adx_val >= 22, "current": f"ADX {adx_val:.1f}"},
-                    {"name": "Volumen Institucional (RVOL >= 1.2x)", "passed": rvol_val >= 1.15, "current": f"{rvol_val:.2f}x"},
-                    {"name": "Margen RSI Expansión (< 78)", "passed": rsi_val < 78, "current": f"RSI {rsi_val:.1f}"},
-                ]
-            elif cat == "forex":
-                conditions = [
-                    {"name": f"Sobreventa RSI (<= {rsi_target})", "passed": rsi_val <= rsi_target, "current": f"RSI {rsi_val:.1f}"},
-                    {"name": "Banda Inferior Bollinger (%B <= 0.12)", "passed": bb_pct_val <= 0.12, "current": f"%B {bb_pct_val:.2f}"},
-                    {"name": "Giro Momentum MACD", "passed": macd_rising, "current": "Rebote" if macd_rising else "En Caída"},
-                    {"name": "Spread Interbancario Líquido", "passed": True, "current": "< 0.8 pips"},
-                    {"name": "Sesión Activa (Londres/NY)", "passed": True, "current": "Alta Liquidez"},
-                ]
-            elif cat == "indices":
-                conditions = [
-                    {"name": "Tendencia Secular (Close > EMA200)", "passed": close_val > ema200_val, "current": f"{close_val:.1f} vs {ema200_val:.1f}"},
-                    {"name": "Soporte EMA 21/50 (Pullback)", "passed": close_val >= float(last.get("ema_50", close_val)) * 0.995, "current": "En Soporte"},
-                    {"name": "RSI Enfriado (38 a 52)", "passed": (rsi_val >= 38 and rsi_val <= 55), "current": f"RSI {rsi_val:.1f}"},
-                    {"name": "Aceleración MACD", "passed": macd_rising, "current": "Impulso Positivo" if macd_rising else "Consolidando"},
-                    {"name": "Volumen Ponderado (> 1.1x)", "passed": rvol_val >= 1.10, "current": f"{rvol_val:.2f}x"},
-                ]
-            else:
-                conditions = [
-                    {"name": "Régimen Macro (Close > EMA200)", "passed": close_val > ema200_val * 0.985, "current": f"{close_val:.2f} vs {ema200_val:.2f}"},
-                    {"name": f"RSI Sobreventa (<= {rsi_target})", "passed": rsi_val <= rsi_target, "current": f"RSI {rsi_val:.1f}"},
-                    {"name": f"Bollinger %B (<= {bb_target})", "passed": bb_pct_val <= bb_target, "current": f"%B {bb_pct_val:.2f}"},
-                    {"name": "Giro de Histograma MACD", "passed": macd_rising, "current": "Ascendente" if macd_rising else "Descendente"},
-                    {"name": "Volumen Institucional (RVOL >= 1.15x)", "passed": rvol_val >= 1.15, "current": f"{rvol_val:.2f}x"},
-                ]
+                    buy_rsi_thr = getattr(strat, "buy_rsi_threshold", None)
+                    rsi_target = buy_rsi_thr.value if buy_rsi_thr else 34
+                    buy_bb_thr = getattr(strat, "buy_bb_percent", None)
+                    bb_target = buy_bb_thr.value if buy_bb_thr else 0.15
 
-            passed_count = sum(1 for c in conditions if c["passed"])
-            prec = pair_meta.get("precision", 2)
+                    cat = pair_meta.get("category", "crypto")
+                    if cat == "commodity":
+                        conditions = [
+                            {"name": "Tendencia Macro (Close > EMA200)", "passed": close_val > ema200_val, "current": f"{close_val:.2f} vs {ema200_val:.2f}"},
+                            {"name": "Ruptura Canales Donchian", "passed": close_val >= float(last.get("donchian_high", close_val)), "current": "Ruptura Alta" if close_val >= float(last.get("donchian_high", close_val)) else "En Rango"},
+                            {"name": "Fuerza Tendencial ADX (>= 22)", "passed": adx_val >= 22, "current": f"ADX {adx_val:.1f}"},
+                            {"name": "Volumen Institucional (RVOL >= 1.2x)", "passed": rvol_val >= 1.15, "current": f"{rvol_val:.2f}x"},
+                            {"name": "Margen RSI Expansión (< 78)", "passed": rsi_val < 78, "current": f"RSI {rsi_val:.1f}"},
+                        ]
+                    elif cat == "forex":
+                        conditions = [
+                            {"name": f"Sobreventa RSI (<= {rsi_target})", "passed": rsi_val <= rsi_target, "current": f"RSI {rsi_val:.1f}"},
+                            {"name": "Banda Inferior Bollinger (%B <= 0.12)", "passed": bb_pct_val <= 0.12, "current": f"%B {bb_pct_val:.2f}"},
+                            {"name": "Giro Momentum MACD", "passed": macd_rising, "current": "Rebote" if macd_rising else "En Caída"},
+                            {"name": "Spread Interbancario Líquido", "passed": True, "current": "< 0.8 pips"},
+                            {"name": "Sesión Activa (Londres/NY)", "passed": True, "current": "Alta Liquidez"},
+                        ]
+                    elif cat == "indices":
+                        conditions = [
+                            {"name": "Tendencia Secular (Close > EMA200)", "passed": close_val > ema200_val, "current": f"{close_val:.1f} vs {ema200_val:.1f}"},
+                            {"name": "Soporte EMA 21/50 (Pullback)", "passed": close_val >= float(last.get("ema_50", close_val)) * 0.995, "current": "En Soporte"},
+                            {"name": "RSI Enfriado (38 a 52)", "passed": (rsi_val >= 38 and rsi_val <= 55), "current": f"RSI {rsi_val:.1f}"},
+                            {"name": "Aceleración MACD", "passed": macd_rising, "current": "Impulso Positivo" if macd_rising else "Consolidando"},
+                            {"name": "Volumen Ponderado (> 1.1x)", "passed": rvol_val >= 1.10, "current": f"{rvol_val:.2f}x"},
+                        ]
+                    else:
+                        conditions = [
+                            {"name": "Régimen Macro (Close > EMA200)", "passed": close_val > ema200_val * 0.985, "current": f"{close_val:.2f} vs {ema200_val:.2f}"},
+                            {"name": f"RSI Sobreventa (<= {rsi_target})", "passed": rsi_val <= rsi_target, "current": f"RSI {rsi_val:.1f}"},
+                            {"name": f"Bollinger %B (<= {bb_target})", "passed": bb_pct_val <= bb_target, "current": f"%B {bb_pct_val:.2f}"},
+                            {"name": "Giro de Histograma MACD", "passed": macd_rising, "current": "Ascendente" if macd_rising else "Descendente"},
+                            {"name": "Volumen Institucional (RVOL >= 1.15x)", "passed": rvol_val >= 1.15, "current": f"{rvol_val:.2f}x"},
+                        ]
 
-            self.radar_signals[pair] = {
-                "pair": pair,
-                "category": cat,
-                "asset_name": pair_meta.get("name", pair),
-                "strategy": strat_name,
-                "price": round(close_val, prec),
-                "change_24h": self.market.price_change_24h.get(pair, 0.0),
-                "volume_24h": self.market.volume_24h.get(pair, 0.0),
-                "rsi": round(rsi_val, 1),
-                "adx": round(adx_val, 1),
-                "bb_percent": round(bb_pct_val, 2),
-                "rvol": round(rvol_val, 2),
-                "atr_pct": round(float(last.get("atr_pct", 0.5)), 2),
-                "regime": "BULLISH" if close_val >= ema200_val else "BEARISH",
-                "score_long": float(last.get("signal_score_long", 50.0)),
-                "score_short": float(last.get("signal_score_short", 30.0)),
-                "enter_long": int(0 if pd.isna(last.get("enter_long")) else last.get("enter_long")),
-                "enter_short": int(0 if pd.isna(last.get("enter_short")) else last.get("enter_short")),
-                "enter_tag": str(last.get("enter_tag", "") if not pd.isna(last.get("enter_tag")) else ""),
-                "conditions_passed": passed_count,
-                "conditions_total": len(conditions),
-                "conditions": conditions,
-                "freqai": ai_pred,
-            }
+                    passed_count = sum(1 for c in conditions if c["passed"])
+                    prec = pair_meta.get("precision", 2)
 
+                    self.radar_signals[pair] = {
+                        "pair": pair,
+                        "category": cat,
+                        "asset_name": pair_meta.get("name", pair),
+                        "strategy": strat_name,
+                        "price": round(close_val, prec),
+                        "change_24h": self.market.price_change_24h.get(pair, 0.0),
+                        "volume_24h": self.market.volume_24h.get(pair, 0.0),
+                        "rsi": round(rsi_val, 1),
+                        "adx": round(adx_val, 1),
+                        "bb_percent": round(bb_pct_val, 2),
+                        "rvol": round(rvol_val, 2),
+                        "atr_pct": round(float(last.get("atr_pct", 0.5)), 2),
+                        "regime": "BULLISH" if close_val >= ema200_val else "BEARISH",
+                        "score_long": float(last.get("signal_score_long", 50.0)),
+                        "score_short": float(last.get("signal_score_short", 30.0)),
+                        "enter_long": int(0 if pd.isna(last.get("enter_long")) else last.get("enter_long")),
+                        "enter_short": int(0 if pd.isna(last.get("enter_short")) else last.get("enter_short")),
+                        "enter_tag": str(last.get("enter_tag", "") if not pd.isna(last.get("enter_tag")) else ""),
+                        "conditions_passed": passed_count,
+                        "conditions_total": len(conditions),
+                        "conditions": conditions,
+                        "freqai": ai_pred,
+                    }
+                except Exception as exc:
+                    logger.debug(f"Error procesando señales para {pair}: {exc}")
+
+        await asyncio.gather(*[_evaluate_single_pair(p) for p in self.market.PAIRS], return_exceptions=True)
         self._recalculate_open_trades()
 
     def get_portfolio_summary(self) -> Dict[str, Any]:
