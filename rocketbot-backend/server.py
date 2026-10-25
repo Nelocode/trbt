@@ -64,18 +64,22 @@ def get_account_protections(acc: Any = None) -> List[Dict[str, Any]]:
     rules = getattr(acc, "prop_firm_rules", {}) if acc else {}
     is_prop = getattr(acc, "account_type", "") == "prop_firm" if acc else False
 
+    loss_limit = rules.get("max_daily_loss_pct", 5.0) if is_prop else getattr(circuit_breaker, "max_daily_loss_pct", 4.0)
+    streak_limit = getattr(circuit_breaker, "max_consecutive_losses", 3)
+    streak_curr = getattr(circuit_breaker, "consecutive_losses_count", 0)
+
     protections = [
         {
             "name": "Prop Firm Shield Diario" if is_prop else "CircuitBreaker Diario",
             "status": "ACTIVO",
             "type": "drawdown",
-            "detail": f"Freno automático si pérdida diaria >= {rules.get('max_daily_loss_pct', 5.0) if is_prop else circuit_breaker.max_daily_loss_pct}% (Actual: {circuit_breaker.current_daily_loss_pct:.1f}%)",
+            "detail": f"Freno automático si pérdida diaria >= {loss_limit}% para preservar el balance",
         },
         {
             "name": "Prop Firm Drawdown Total" if is_prop else "Racha Perdedora (Streak Guard)",
             "status": "ACTIVO",
             "type": "drawdown" if is_prop else "streak",
-            "detail": f"Drawdown máximo acumulado {rules.get('max_total_loss_pct', 10.0)}%" if is_prop else f"Pausa preventiva tras {circuit_breaker.max_consecutive_losses} pérdidas seguidas (Actual: {circuit_breaker.consecutive_losses})",
+            "detail": f"Drawdown máximo acumulado {rules.get('max_total_loss_pct', 10.0)}%" if is_prop else f"Pausa preventiva tras {streak_limit} pérdidas seguidas (Actual: {streak_curr})",
         },
         {
             "name": "Filtro de Régimen Macro EMA 200",
