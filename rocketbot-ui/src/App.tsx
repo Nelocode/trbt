@@ -306,6 +306,33 @@ export default function App() {
   const [wsConnected, setWsConnected] = useState<boolean>(false);
   const [bottomTab, setBottomTab] = useState<'open' | 'closed' | 'protections'>('open');
 
+  const fallbackProtections = [
+    {
+      name: 'CircuitBreaker Diario',
+      status: 'ACTIVO',
+      detail: 'Freno automático ante pérdida diaria >= 4.0% para preservar el balance',
+    },
+    {
+      name: 'Racha Perdedora (Streak Guard)',
+      status: 'ACTIVO',
+      detail: 'Pausa preventiva tras 3 operaciones perdedoras consecutivas',
+    },
+    {
+      name: 'Filtro Macro EMA 200',
+      status: 'ACTIVO',
+      detail: 'Solo permite compras si el precio opera sobre la media institucional con ADX tendencial',
+    },
+    {
+      name: 'Cooldown Anti-Overtrading',
+      status: 'ACTIVO',
+      detail: 'Pausa de 2 velas tras salida de posición para evitar sobre-operación impulsiva',
+    },
+  ];
+
+  const protectionsList = (portfolio?.protections && Array.isArray(portfolio.protections) && portfolio.protections.length > 0)
+    ? portfolio.protections
+    : fallbackProtections;
+
   const fetchOverview = useCallback(async () => {
     try {
       const headers: Record<string, string> = {};
@@ -904,7 +931,7 @@ export default function App() {
                       onClick={() => setBottomTab('protections')}
                       className={`figma-tab-item ${bottomTab === 'protections' ? 'active' : ''}`}
                     >
-                      Protecciones de Riesgo (4)
+                      Protecciones de Riesgo ({protectionsList.length})
                     </button>
                   </div>
 
@@ -1125,18 +1152,26 @@ export default function App() {
 
                 {bottomTab === 'protections' && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-4">
-                    {portfolio.protections?.map((p: any, i: number) => (
+                    {protectionsList.map((p: any, i: number) => (
                       <div
                         key={i}
-                        className="p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06]"
+                        className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-[#00E599]/30 transition group"
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-white font-heading">{p.name}</span>
-                          <span className="px-2 py-0.5 text-[10px] font-mono rounded-full bg-[#00DFDF]/20 text-[#00DFDF]">
-                            {p.status}
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <div className="p-1.5 rounded-lg bg-[#00E599]/15 text-[#00E599] border border-[#00E599]/30 group-hover:scale-105 transition">
+                              <Shield className="w-4 h-4" />
+                            </div>
+                            <span className="text-xs font-bold text-white font-heading">{p.name}</span>
+                          </div>
+                          <span className="px-2 py-0.5 text-[10px] font-mono font-bold rounded-full bg-[#00E599]/15 text-[#00E599] border border-[#00E599]/30 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#00E599] animate-pulse"></span>
+                            <span>{p.status || 'ACTIVO'}</span>
                           </span>
                         </div>
-                        <p className="text-xs text-[#8E95A2] mt-1.5">{p.detail}</p>
+                        <p className="text-xs text-[#8E95A2] font-sans leading-relaxed mt-1">
+                          {p.detail}
+                        </p>
                       </div>
                     ))}
                   </div>

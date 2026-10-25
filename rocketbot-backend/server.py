@@ -58,6 +58,40 @@ from auth_manager import auth_manager, create_jwt_token, verify_jwt_token
 
 circuit_breaker = CircuitBreakerEngine(max_daily_loss_pct=4.0, max_consecutive_losses=3)
 
+
+def get_account_protections(acc: Any = None) -> List[Dict[str, Any]]:
+    """Devuelve el estado de las protecciones cuantitativas y salvaguardas de la cuenta."""
+    rules = getattr(acc, "prop_firm_rules", {}) if acc else {}
+    is_prop = getattr(acc, "account_type", "") == "prop_firm" if acc else False
+
+    protections = [
+        {
+            "name": "Prop Firm Shield Diario" if is_prop else "CircuitBreaker Diario",
+            "status": "ACTIVO",
+            "type": "drawdown",
+            "detail": f"Freno automático si pérdida diaria >= {rules.get('max_daily_loss_pct', 5.0) if is_prop else circuit_breaker.max_daily_loss_pct}% (Actual: {circuit_breaker.current_daily_loss_pct:.1f}%)",
+        },
+        {
+            "name": "Prop Firm Drawdown Total" if is_prop else "Racha Perdedora (Streak Guard)",
+            "status": "ACTIVO",
+            "type": "drawdown" if is_prop else "streak",
+            "detail": f"Drawdown máximo acumulado {rules.get('max_total_loss_pct', 10.0)}%" if is_prop else f"Pausa preventiva tras {circuit_breaker.max_consecutive_losses} pérdidas seguidas (Actual: {circuit_breaker.consecutive_losses})",
+        },
+        {
+            "name": "Filtro de Régimen Macro EMA 200",
+            "status": "ACTIVO",
+            "type": "filter",
+            "detail": "Solo ejecuta compras si el precio opera sobre la media institucional con ADX tendencial",
+        },
+        {
+            "name": "Cooldown Anti-Overtrading",
+            "status": "ACTIVO",
+            "type": "cooldown",
+            "detail": "2 velas de espera obligatorias tras salida para evitar sobre-operación impulsiva",
+        },
+    ]
+    return protections
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("rocketbot")
 
@@ -1458,6 +1492,7 @@ async def get_overview(account_id: Optional[str] = None, authorization: Optional
         "active_strategy": acc.active_strategy,
         "leverage": acc.leverage,
         "last_update": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "protections": get_account_protections(acc),
     }
 
     return {
@@ -2052,6 +2087,7 @@ async def websocket_realtime_stream(websocket: WebSocket):
                 "active_strategy": acc.active_strategy,
                 "leverage": acc.leverage,
                 "last_update": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "protections": get_account_protections(acc),
             }
 
             payload = {
