@@ -5,7 +5,6 @@ import {
   ShieldCheck,
   Play,
   Pause,
-  AlertTriangle,
   ArrowUpRight,
   ArrowDownRight,
   BrainCircuit,
@@ -13,14 +12,17 @@ import {
   HelpCircle,
   ChevronDown,
   ChevronUp,
-  Sparkles,
-  Zap,
   Clock,
   Shield,
-  Activity,
   ArrowRight,
-  Check,
+  LineChart,
 } from 'lucide-react';
+import {
+  TradingViewChart,
+  type CandlePoint,
+  type ChartMarker,
+  type OpenTradeOverlay,
+} from './TradingViewChart';
 
 interface JuniorDashboardViewProps {
   portfolio: any;
@@ -34,6 +36,13 @@ interface JuniorDashboardViewProps {
   onOpenAICopilot: () => void;
   onSwitchToPro: () => void;
   accountName?: string;
+  selectedPair?: string;
+  setSelectedPair?: (pair: string) => void;
+  timeframe?: string;
+  setTimeframe?: (tf: string) => void;
+  candles?: CandlePoint[];
+  markers?: ChartMarker[];
+  activeTradeForSelectedPair?: OpenTradeOverlay;
 }
 
 export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
@@ -48,6 +57,13 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
   onOpenAICopilot,
   onSwitchToPro,
   accountName = 'Mi Cuenta de Trading',
+  selectedPair = 'BTC/USDT',
+  setSelectedPair,
+  timeframe = '5m',
+  setTimeframe = () => {},
+  candles = [],
+  markers = [],
+  activeTradeForSelectedPair,
 }) => {
   const [closingTradeId, setClosingTradeId] = useState<number | null>(null);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
@@ -69,10 +85,22 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
     }
   };
 
+  const quickPairs = [
+    { symbol: 'BTC/USDT', label: 'Bitcoin' },
+    { symbol: 'ETH/USDT', label: 'Ethereum' },
+    { symbol: 'SOL/USDT', label: 'Solana' },
+    { symbol: 'XAU/USD', label: 'Oro' },
+    { symbol: 'NAS100/USD', label: 'Nasdaq' },
+  ];
+
   const faqs = [
     {
       q: '¿Tengo que dejar mi computadora o celular encendido?',
       a: 'No. RocketBot opera en un servidor seguro en la nube 24/7. Puedes cerrar tu navegador o apagar tus dispositivos y el bot continuará vigilando y ejecutando tus órdenes.',
+    },
+    {
+      q: '¿Qué significan las flechas en el gráfico?',
+      a: 'Las flechas verdes marcan los puntos exactos donde el algoritmo detectó una ventaja estadística y abrió una operación. Las flechas rojas muestran dónde se tomaron ganancias o se activó la parada de protección.',
     },
     {
       q: '¿Qué significa el Modo Práctica (Dry-Run)?',
@@ -259,7 +287,78 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
         </div>
       </div>
 
-      {/* 3. COPILOTO / MENTOR IA (Diagnóstico en Lenguaje Humano) */}
+      {/* 3. GRÁFICO EN VIVO ADAPTADO (El corazón visual del mercado) */}
+      <div className="p-4 sm:p-5 figma-card rounded-2xl border border-white/[0.08] space-y-3.5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-[#00DFDF] animate-pulse shadow-[0_0_6px_#00DFDF]" />
+              <h2 className="text-base sm:text-lg font-bold font-heading text-white flex items-center gap-2">
+                <LineChart className="w-4 h-4 text-[#00DFDF]" />
+                <span>Gráfico en Vivo: {selectedPair}</span>
+              </h2>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#0A7CFF]/15 text-[#0A7CFF] border border-[#0A7CFF]/30">
+                {timeframe}
+              </span>
+            </div>
+            <p className="text-xs text-[#8E95A2] mt-0.5">
+              Observa el movimiento del precio en tiempo real y las marcas donde el bot detecta oportunidades institucionales.
+            </p>
+          </div>
+
+          {/* Selector de Activos Populares con chips interactivos */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+            {quickPairs.map((p) => {
+              const isSelected = selectedPair === p.symbol;
+              return (
+                <button
+                  key={p.symbol}
+                  type="button"
+                  onClick={() => setSelectedPair?.(p.symbol)}
+                  className={`h-8 px-2.5 rounded-xl text-xs font-mono font-semibold transition cursor-pointer shrink-0 flex items-center gap-1 ${
+                    isSelected
+                      ? 'bg-[#00DFDF]/15 text-[#00DFDF] border border-[#00DFDF]/40 shadow-[0_0_10px_rgba(0,223,223,0.2)]'
+                      : 'bg-white/[0.04] text-[#8E95A2] hover:text-white border border-white/[0.06]'
+                  }`}
+                >
+                  <span>{p.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Contenedor del Gráfico con altura proporcional */}
+        <div className="h-[360px] sm:h-[420px] w-full rounded-xl overflow-hidden border border-white/[0.06] bg-[#07090E]">
+          <TradingViewChart
+            pair={selectedPair}
+            timeframe={timeframe}
+            strategyName={portfolio?.active_strategy || 'RocketMultiFactorV1'}
+            candles={candles}
+            markers={markers}
+            activeTrade={activeTradeForSelectedPair}
+            onTimeframeChange={setTimeframe}
+          />
+        </div>
+
+        {/* Leyenda explicativa clara para principiantes */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-white/[0.06] text-[11px] text-[#8E95A2]">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#00DFDF] shrink-0" />
+            <span><strong className="text-white">Flecha Verde:</strong> Señal de compra del algoritmo.</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#FF3B69] shrink-0" />
+            <span><strong className="text-white">Flecha Roja:</strong> Toma de ganancias o Stop Loss.</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#0A7CFF] shrink-0" />
+            <span><strong className="text-white">Líneas Guía:</strong> Tendencia de los grandes inversores.</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 4. COPILOTO / MENTOR IA (Diagnóstico en Lenguaje Humano) */}
       <div className="p-4 sm:p-5 figma-card rounded-2xl border border-[#00DFDF]/25 bg-gradient-to-r from-[#00DFDF]/5 via-transparent to-[#0A7CFF]/5">
         <div className="flex items-start gap-3.5">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#00DFDF]/20 to-[#0A7CFF]/20 border border-[#00DFDF]/40 flex items-center justify-center text-[#00DFDF] shrink-0">
@@ -298,7 +397,7 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
         </div>
       </div>
 
-      {/* 4. OPERACIONES EN CURSO (Tarjetas Visuales para Humanos, NO tablas complejas) */}
+      {/* 5. OPERACIONES EN CURSO (Tarjetas Visuales para Humanos, NO tablas complejas) */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div>
@@ -339,16 +438,23 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
               return (
                 <div
                   key={t.trade_id}
-                  className="p-4 sm:p-5 figma-card rounded-2xl border border-white/[0.1] space-y-4 hover:border-white/[0.2] transition duration-200"
+                  onClick={() => setSelectedPair?.(t.pair)}
+                  className="p-4 sm:p-5 figma-card rounded-2xl border border-white/[0.1] space-y-4 hover:border-[#00DFDF]/50 transition duration-200 cursor-pointer group"
+                  title="Haz clic para ver este par en el gráfico superior"
                 >
                   {/* Encabezado del trade */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-xl bg-white/[0.06] border border-white/[0.08] flex items-center justify-center font-bold text-xs text-white">
+                      <div className="w-9 h-9 rounded-xl bg-white/[0.06] border border-white/[0.08] flex items-center justify-center font-bold text-xs text-white group-hover:border-[#00DFDF]/40 transition">
                         {t.pair.split('/')[0]}
                       </div>
                       <div>
-                        <div className="text-sm font-bold font-heading text-white">{t.pair}</div>
+                        <div className="text-sm font-bold font-heading text-white flex items-center gap-1.5">
+                          <span>{t.pair}</span>
+                          <span className="text-[10px] text-[#00DFDF] opacity-0 group-hover:opacity-100 transition">
+                            (Ver en gráfico)
+                          </span>
+                        </div>
                         <div className="text-[11px] text-[#8E95A2] font-mono">
                           Inversión: ${t.stake_amount ?? t.amount} USD
                         </div>
@@ -416,16 +522,17 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
                     </div>
 
                     <button
-                      onClick={() => handleCloseClick(t.trade_id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCloseClick(t.trade_id);
+                      }}
                       disabled={closingTradeId === t.trade_id}
                       className="h-9 px-3.5 rounded-xl bg-[#FF3B69]/15 hover:bg-[#FF3B69]/25 text-[#FF3B69] border border-[#FF3B69]/35 text-xs font-heading font-semibold transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                     >
                       {closingTradeId === t.trade_id ? (
                         <span>Cerrando...</span>
                       ) : (
-                        <>
-                          <span>Cerrar Ahora</span>
-                        </>
+                        <span>Cerrar Ahora</span>
                       )}
                     </button>
                   </div>
@@ -445,7 +552,7 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
         )}
       </div>
 
-      {/* 5. EL ESCUDO PROTECTOR (4 Reglas Explicadas Sin Tecnicismos) */}
+      {/* 6. EL ESCUDO PROTECTOR (4 Reglas Explicadas Sin Tecnicismos) */}
       <div className="p-5 sm:p-6 figma-card rounded-2xl border border-white/[0.08] space-y-4">
         <div>
           <h2 className="text-base sm:text-lg font-bold font-heading text-white flex items-center gap-2">
@@ -500,7 +607,7 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
         </div>
       </div>
 
-      {/* 6. PREGUNTAS FRECUENTES INTERACTIVAS */}
+      {/* 7. PREGUNTAS FRECUENTES INTERACTIVAS */}
       <div className="p-5 sm:p-6 figma-card rounded-2xl border border-white/[0.08] space-y-3">
         <h2 className="text-base sm:text-lg font-bold font-heading text-white flex items-center gap-2">
           <HelpCircle className="w-5 h-5 text-[#0A7CFF]" />
@@ -535,15 +642,15 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
         </div>
       </div>
 
-      {/* 7. PIE DE PÁGINA: Invitación al Modo PRO */}
+      {/* 8. PIE DE PÁGINA: Invitación al Modo PRO */}
       <div className="p-5 figma-card rounded-2xl border border-[#0A7CFF]/30 bg-gradient-to-r from-[#0A7CFF]/10 to-transparent flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="space-y-1 text-center sm:text-left">
           <div className="flex items-center justify-center sm:justify-start gap-2 text-sm font-bold font-heading text-white">
-            <Zap className="w-4 h-4 text-[#0A7CFF]" />
+            <span className="text-base">⚡</span>
             <span>¿Listo para dar el siguiente paso?</span>
           </div>
           <p className="text-xs text-[#8E95A2]">
-            Puedes cambiar a la <strong className="text-white">Vista PRO</strong> para explorar gráficos de TradingView, matrices de correlación y escáneres avanzados.
+            Puedes cambiar a la <strong className="text-white">Vista PRO</strong> para explorar el radar multi-activo, matrices de correlación y scripts Hyperopt.
           </p>
         </div>
 

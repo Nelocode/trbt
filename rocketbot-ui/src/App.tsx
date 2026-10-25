@@ -817,6 +817,13 @@ export default function App() {
             onOpenAICopilot={() => setIsAIOpen(true)}
             onSwitchToPro={() => handleSetExperienceMode('pro')}
             accountName={portfolio?.name || portfolio?.account_name || activeAccountId}
+            selectedPair={selectedPair}
+            setSelectedPair={setSelectedPair}
+            timeframe={timeframe}
+            setTimeframe={setTimeframe}
+            candles={candles}
+            markers={markers}
+            activeTradeForSelectedPair={activeTradeForSelectedPair}
           />
         </main>
       ) : (
