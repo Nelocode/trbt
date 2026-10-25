@@ -27,7 +27,10 @@ import {
   Bell,
   Plus,
   Minus,
+  Menu,
+  X,
 } from 'lucide-react';
+import { JuniorDashboardView } from './components/JuniorDashboardView';
 import {
   TradingViewChart,
   type CandlePoint,
@@ -188,6 +191,22 @@ export default function App() {
     }
   }, [authToken]);
 
+  const [experienceMode, setExperienceMode] = useState<'junior' | 'pro'>(() => {
+    try {
+      return (localStorage.getItem('rocketbot_experience_mode') as 'junior' | 'pro') || 'junior';
+    } catch {
+      return 'junior';
+    }
+  });
+
+  const handleSetExperienceMode = (mode: 'junior' | 'pro') => {
+    setExperienceMode(mode);
+    try {
+      localStorage.setItem('rocketbot_experience_mode', mode);
+    } catch {}
+  };
+
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'terminal' | 'lab' | 'freqai'>('terminal');
   const [isTourOpen, setIsTourOpen] = useState<boolean>(false);
   const [isManualModalOpen, setIsManualModalOpen] = useState<boolean>(false);
@@ -499,254 +518,311 @@ export default function App() {
       {/* Resplandor difuso ambiental de fondo (sin desplazar contenido) */}
       <div className="ambient-glow-top" />
 
-      {/* Header Compacto y Proporcional */}
-      <header className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-black/85 backdrop-blur-xl border-b border-white/[0.08]">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl figma-btn-primary p-0 flex items-center justify-center text-white">
-              <Rocket className="w-4 h-4 stroke-[2.5]" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-extrabold font-heading tracking-tight text-white text-sm">
-                  ROCKETBOT <span className="text-[#0A7CFF]">PRO</span>
-                </span>
-                <span className="figma-badge-wip text-[10px] text-[#0A7CFF] py-0.2 px-1.5">
-                  v2.0 Engine
-                </span>
-                <InfoTooltip
-                  title="RocketBot Pro v2.0"
-                  description="Plataforma de trading algorítmico institucional que unifica motor de ejecución en vivo, radar multi-factor y laboratorio de backtesting."
-                  impact="Te permite monitorear y operar sin las limitaciones de modo dividido de Freqtrade tradicional."
-                />
+      {/* Header Compacto, Proporcional y 100% Responsive */}
+      <header className="sticky top-0 z-30 px-3 sm:px-4 py-2 bg-black/85 backdrop-blur-xl border-b border-white/[0.08]">
+        <div className="flex items-center justify-between gap-2.5">
+          {/* Lado Izquierdo: Brand + Switcher de Experiencia (Principiante vs PRO) */}
+          <div className="flex items-center gap-2 sm:gap-3.5 shrink-0">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl figma-btn-primary p-0 flex items-center justify-center text-white shrink-0">
+                <Rocket className="w-4 h-4 stroke-[2.5]" />
               </div>
-              <div className="text-[10px] text-[#8E95A2] font-mono flex items-center gap-2">
-                <span>{portfolio.data_source}</span>
-                <span>•</span>
-                <span className="flex items-center gap-1.5">
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      wsConnected ? 'bg-[#00DFDF] shadow-[0_0_6px_#00DFDF]' : 'bg-[#F5A623]'
-                    }`}
-                  />
-                  {wsConnected ? 'Stream WS (<10ms)' : 'Reconectando WS...'}
-                </span>
+              <div className="hidden sm:block">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-extrabold font-heading tracking-tight text-white text-xs sm:text-sm">
+                    ROCKETBOT <span className="text-[#0A7CFF]">PRO</span>
+                  </span>
+                  <span className="figma-badge-wip text-[9px] text-[#0A7CFF] py-0.2 px-1 hidden md:inline-flex">
+                    v2.0
+                  </span>
+                </div>
               </div>
             </div>
+
+            {/* Selector de Modo con Tamaños y Formas Uniformes (h-8 sm:h-9) */}
+            <div className="flex items-center p-0.5 rounded-xl bg-white/[0.05] border border-white/[0.1] text-xs font-heading">
+              <button
+                type="button"
+                onClick={() => handleSetExperienceMode('junior')}
+                className={`h-7 sm:h-8 px-2 sm:px-3 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
+                  experienceMode === 'junior'
+                    ? 'bg-gradient-to-r from-[#00DFDF]/20 to-[#0A7CFF]/20 text-[#00DFDF] border border-[#00DFDF]/40 font-bold shadow-[0_0_10px_rgba(0,223,223,0.2)]'
+                    : 'text-[#8E95A2] hover:text-white font-medium'
+                }`}
+                title="Modo Principiante: Interfaz limpia, asistida y sin jerga técnica para aprender con confianza"
+              >
+                <span>🌱</span>
+                <span className="text-[11px] sm:text-xs">Principiante</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSetExperienceMode('pro')}
+                className={`h-7 sm:h-8 px-2 sm:px-3 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
+                  experienceMode === 'pro'
+                    ? 'figma-btn-primary text-white font-bold shadow-[0_0_12px_rgba(10,124,255,0.3)]'
+                    : 'text-[#8E95A2] hover:text-white font-medium'
+                }`}
+                title="Modo PRO: Terminal completa institucional con TradingView, radar cuantitativo y backtests"
+              >
+                <span>⚡</span>
+                <span className="text-[11px] sm:text-xs">PRO</span>
+              </button>
+            </div>
+
+            {/* Selector de Subcuenta Aislada (En Desktop) */}
+            <div data-tour="account-switcher" className="hidden lg:block">
+              <AccountSwitcherDropdown
+                apiBase={API_BASE}
+                activeAccountId={activeAccountId}
+                isPrivacyMode={isPrivacyMode}
+                token={authToken}
+                onAccountSwitched={handleAccountSwitched}
+                onOpenNewAccountModal={() => setIsNewAccountModalOpen(true)}
+                onOpenMasterModal={() => setIsMasterModalOpen(true)}
+              />
+            </div>
+
+            {/* Menú de Pestañas (Solo en modo PRO y en pantallas grandes) */}
+            {experienceMode === 'pro' && (
+              <nav className="hidden xl:flex items-center figma-tablist-pill">
+                <button
+                  onClick={() => setActiveTab('terminal')}
+                  className={`figma-tab-item ${activeTab === 'terminal' ? 'active' : ''}`}
+                >
+                  <Activity className="w-3.5 h-3.5 inline mr-1" />
+                  <span>Terminal</span>
+                </button>
+
+                <button
+                  data-tour="lab-tab"
+                  onClick={() => setActiveTab('lab')}
+                  className={`figma-tab-item ${activeTab === 'lab' ? 'active' : ''}`}
+                >
+                  <FlaskConical className="w-3.5 h-3.5 inline mr-1" />
+                  <span>Backtest</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('freqai')}
+                  className={`figma-tab-item ${activeTab === 'freqai' ? 'active' : ''}`}
+                >
+                  <BrainCircuit className="w-3.5 h-3.5 inline mr-1" />
+                  <span>FreqAI</span>
+                </button>
+              </nav>
+            )}
           </div>
 
-          {/* Selector de Subcuenta Aislada */}
-          <div data-tour="account-switcher" className="hidden sm:block">
-            <AccountSwitcherDropdown
-              apiBase={API_BASE}
-              activeAccountId={activeAccountId}
-              isPrivacyMode={isPrivacyMode}
-              token={authToken}
-              onAccountSwitched={handleAccountSwitched}
-              onOpenNewAccountModal={() => setIsNewAccountModalOpen(true)}
-              onOpenMasterModal={() => setIsMasterModalOpen(true)}
-            />
-          </div>
-
-          {/* Menú de Navegación Centrado */}
-          <nav className="flex items-center figma-tablist-pill">
-            <button
-              onClick={() => setActiveTab('terminal')}
-              className={`figma-tab-item ${activeTab === 'terminal' ? 'active' : ''}`}
-            >
-              <Activity className="w-3.5 h-3.5 inline mr-1" />
-              <span>Terminal Trading</span>
-            </button>
-
-            <button
-              data-tour="lab-tab"
-              onClick={() => setActiveTab('lab')}
-              className={`figma-tab-item ${activeTab === 'lab' ? 'active' : ''}`}
-            >
-              <FlaskConical className="w-3.5 h-3.5 inline mr-1" />
-              <span>Backtest & Hyperopt</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('freqai')}
-              className={`figma-tab-item ${activeTab === 'freqai' ? 'active' : ''}`}
-            >
-              <BrainCircuit className="w-3.5 h-3.5 inline mr-1" />
-              <span>FreqAI ML</span>
-            </button>
-          </nav>
-        </div>
-
-        {/* Controles de Ejecución */}
-        <div data-tour="header-controls" className="flex items-center gap-2.5">
-          <div className="flex items-center gap-1">
-            <button
-              onClick={toggleTradingMode}
-              className="px-2.5 py-1.5 rounded-lg figma-btn-secondary text-xs font-mono font-medium text-white transition cursor-pointer"
-            >
-              {portfolio.trading_mode === 'futures' ? 'FUTURES (3x ISOLATED)' : 'SPOT MARKET'}
-            </button>
-            <InfoTooltip
-              title="Modo de Mercado (Futuros vs Spot)"
-              description="Alterna entre operaciones al contado (Spot, solo compras alcistas) y contratos perpetuos con apalancamiento (Futuros, compras Long y ventas Short)."
-              impact="En Futuros puedes ganar en caídas (Short) pero existe riesgo de liquidación si el precio toca el stop extremo."
-            />
-          </div>
-
-          <div className="flex items-center gap-1">
-            <button
-              onClick={toggleDryRunMode}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold transition cursor-pointer flex items-center gap-1.5 ${
-                portfolio.dry_run
-                  ? 'bg-[#0A7CFF]/15 border border-[#0A7CFF]/30 text-[#0A7CFF] hover:bg-[#0A7CFF]/25'
-                  : 'bg-[#FF3B69]/20 border border-[#FF3B69]/40 text-[#FF3B69] hover:bg-[#FF3B69]/30 shadow-[0_0_15px_rgba(255,59,105,0.3)] animate-pulse'
-              }`}
-              title="Click para alternar entre Simulador Dry-Run y Capital Real Live (requiere confirmación)"
-            >
-              <span className={`w-2 h-2 rounded-full ${portfolio.dry_run ? 'bg-[#0A7CFF]' : 'bg-[#FF3B69]'}`} />
-              <span>{portfolio.dry_run ? 'DRY-RUN SIMULATOR' : 'LIVE CAPITAL'}</span>
-            </button>
-            <InfoTooltip
-              title="Modo de Ejecución (Dry-Run vs Live)"
-              description="Alterna entre el simulador de latencia cero sin riesgo de balance (Dry-Run) y la ejecución con capital real directo en exchange/broker."
-              impact="Para activar LIVE CAPITAL debes aceptar la confirmación de riesgo institucional en 2 pasos."
-            />
-          </div>
-
-          <button
-            onClick={toggleBotState}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-heading transition cursor-pointer ${
-              portfolio.state === 'RUNNING'
-                ? 'figma-btn-primary text-white'
-                : 'bg-[#FF3B69]/20 text-[#FF3B69] border border-[#FF3B69]/40'
-            }`}
-          >
-            {portfolio.state === 'RUNNING' ? (
+          {/* Lado Derecho: Controles con Alturas Idénticas (h-8 sm:h-9) y Bordes Redondeados Iguales */}
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* Controles PRO rápidos (solo si está en PRO) */}
+            {experienceMode === 'pro' && (
               <>
-                <Pause className="w-3.5 h-3.5 fill-current" />
-                <span>BOT ACTIVO</span>
-              </>
-            ) : (
-              <>
-                <Play className="w-3.5 h-3.5 fill-current" />
-                <span>PAUSADO (CLICK INICIAR)</span>
+                <button
+                  onClick={toggleTradingMode}
+                  className="hidden md:flex h-8 sm:h-9 px-2.5 rounded-xl figma-btn-secondary text-xs font-mono font-medium text-white transition cursor-pointer items-center"
+                >
+                  <span>{portfolio.trading_mode === 'futures' ? 'FUTURES 3x' : 'SPOT'}</span>
+                </button>
+
+                <button
+                  onClick={toggleDryRunMode}
+                  className={`hidden sm:flex h-8 sm:h-9 px-2.5 rounded-xl text-xs font-mono font-bold transition cursor-pointer items-center gap-1.5 ${
+                    portfolio.dry_run
+                      ? 'bg-[#0A7CFF]/15 border border-[#0A7CFF]/30 text-[#0A7CFF] hover:bg-[#0A7CFF]/25'
+                      : 'bg-[#FF3B69]/20 border border-[#FF3B69]/40 text-[#FF3B69] hover:bg-[#FF3B69]/30 shadow-[0_0_12px_rgba(255,59,105,0.3)] animate-pulse'
+                  }`}
+                  title="Alternar entre Simulador Dry-Run y Capital Real"
+                >
+                  <span className={`w-2 h-2 rounded-full ${portfolio.dry_run ? 'bg-[#0A7CFF]' : 'bg-[#FF3B69]'}`} />
+                  <span className="hidden md:inline">{portfolio.dry_run ? 'DRY-RUN' : 'LIVE'}</span>
+                </button>
               </>
             )}
-          </button>
-          <InfoTooltip
-            title="Interruptor Maestro del Bot"
-            description="Pausa o reanuda el escaneo de nuevas oportunidades de compra/venta en todos los pares activos."
-            impact="Al pausar, el bot mantiene y protege las posiciones abiertas actuales pero no entrará en nuevos trades."
-          />
 
-          {/* Interruptor de Pánico / Kill-Switch */}
-          <button
-            data-tour="kill-switch-btn"
-            onClick={() => setIsPanicConfirmOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#FF3B69]/15 hover:bg-[#FF3B69]/25 border border-[#FF3B69]/40 text-[#FF3B69] text-xs font-heading font-bold transition cursor-pointer shadow-[0_0_10px_rgba(255,59,105,0.2)]"
-            title="Circuit Breaker: Liquidar todas las operaciones abiertas y pausar el bot de inmediato"
-          >
-            <AlertOctagon className="w-3.5 h-3.5" />
-            <span className="hidden xl:inline">Kill-Switch</span>
-          </button>
-
-          {/* Modo Privacidad (Ocultación de Balance) */}
-          <button
-            data-tour="privacy-btn"
-            onClick={togglePrivacyMode}
-            className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs font-mono font-medium transition cursor-pointer ${
-              isPrivacyMode
-                ? 'bg-[#FFB800]/20 text-[#FFB800] border-[#FFB800]/40'
-                : 'bg-white/[0.05] hover:bg-white/[0.1] border-white/[0.08] text-[#8E95A2] hover:text-white'
-            }`}
-            title={isPrivacyMode ? 'Privacidad Activa: Ocultando saldos y cifras' : 'Modo Privacidad: Ocultar cifras para streaming/capturas'}
-          >
-            {isPrivacyMode ? <EyeOff className="w-3.5 h-3.5 text-[#FFB800]" /> : <Eye className="w-3.5 h-3.5" />}
-          </button>
-
-          {/* Herramientas Institucionales */}
-          <div data-tour="institutional-tools" className="flex items-center gap-1">
+            {/* Botón Maestro Iniciar / Pausar Bot (Uniforme h-8 sm:h-9) */}
             <button
-              onClick={() => setIsCorrelationOpen(true)}
-              className="p-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-[#8E95A2] hover:text-white text-xs transition cursor-pointer"
-              title="Matriz de Correlación Cruzada Rolling (12 Activos)"
+              onClick={toggleBotState}
+              className={`h-8 sm:h-9 px-2.5 sm:px-3 rounded-xl text-xs font-bold font-heading transition cursor-pointer flex items-center gap-1.5 ${
+                portfolio.state === 'RUNNING'
+                  ? 'figma-btn-primary text-white shadow-[0_0_12px_rgba(10,124,255,0.3)]'
+                  : 'bg-[#FF3B69]/15 text-[#FF3B69] border border-[#FF3B69]/35 hover:bg-[#FF3B69]/25'
+              }`}
             >
-              <Layers className="w-3.5 h-3.5 text-[#0A7CFF]" />
+              {portfolio.state === 'RUNNING' ? (
+                <>
+                  <Pause className="w-3.5 h-3.5 fill-current" />
+                  <span className="hidden sm:inline">ACTIVO</span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span className="hidden sm:inline">PAUSADO</span>
+                </>
+              )}
             </button>
 
-            <button
-              onClick={() => setIsPropFirmOpen(true)}
-              className="p-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-[#8E95A2] hover:text-white text-xs transition cursor-pointer"
-              title="Escudo de Reglas de Fondeo (FTMO / Apex)"
-            >
-              <Trophy className="w-3.5 h-3.5 text-[#FFB800]" />
-            </button>
-
-            <button
-              onClick={() => setIsNotificationsOpen(true)}
-              className="p-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-[#8E95A2] hover:text-white text-xs transition cursor-pointer"
-              title="Configurar Alertas 24/7 (Telegram & Discord)"
-            >
-              <Bell className="w-3.5 h-3.5 text-[#00DFDF]" />
-            </button>
-          </div>
-
-          {/* Botones de IA, Documentación y Guía Interactiva */}
-          <div className="flex items-center gap-1.5 pl-2 border-l border-white/[0.08]">
+            {/* Botón Mentor IA (Uniforme h-8 sm:h-9) */}
             <button
               data-tour="ai-copilot-btn"
               onClick={() => setIsAIOpen(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-[#00DFDF]/15 to-[#0A7CFF]/15 hover:from-[#00DFDF]/25 hover:to-[#0A7CFF]/25 border border-[#00DFDF]/35 text-[#00DFDF] text-xs font-heading font-bold transition cursor-pointer shadow-[0_0_12px_rgba(0,223,223,0.2)]"
-              title="Abrir Mentor & Auditor Cuántico IA (Prof. Quant Alpha)"
+              className="h-8 sm:h-9 px-2.5 sm:px-3 rounded-xl bg-gradient-to-r from-[#00DFDF]/15 to-[#0A7CFF]/15 hover:from-[#00DFDF]/25 hover:to-[#0A7CFF]/25 border border-[#00DFDF]/35 text-[#00DFDF] text-xs font-heading font-bold transition cursor-pointer flex items-center gap-1.5 shadow-[0_0_10px_rgba(0,223,223,0.15)]"
+              title="Abrir Mentor IA"
             >
               <BrainCircuit className="w-3.5 h-3.5 text-[#00DFDF]" />
-              <span>Mentor IA</span>
+              <span className="hidden md:inline">Mentor IA</span>
               <span className="w-1.5 h-1.5 rounded-full bg-[#00DFDF] inline-block" />
             </button>
 
-            <button
-              onClick={() => setIsTourOpen(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#0A7CFF]/15 hover:bg-[#0A7CFF]/25 border border-[#0A7CFF]/30 text-[#0A7CFF] text-xs font-heading font-bold transition cursor-pointer shadow-[0_0_12px_rgba(10,124,255,0.2)]"
-              title="Abrir Tutorial Guiado con Globos Flotantes y Enfoque Visual"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Tour</span>
-            </button>
+            {/* Herramientas de Barra PRO (Desktop) */}
+            {experienceMode === 'pro' && (
+              <div className="hidden lg:flex items-center gap-1">
+                <button
+                  data-tour="kill-switch-btn"
+                  onClick={() => setIsPanicConfirmOpen(true)}
+                  className="h-8 sm:h-9 px-2.5 rounded-xl bg-[#FF3B69]/15 hover:bg-[#FF3B69]/25 border border-[#FF3B69]/40 text-[#FF3B69] text-xs font-heading font-bold transition cursor-pointer flex items-center gap-1"
+                  title="Kill-Switch: Liquidar todo y pausar"
+                >
+                  <AlertOctagon className="w-3.5 h-3.5" />
+                  <span className="hidden xl:inline">Kill-Switch</span>
+                </button>
 
-            <button
-              onClick={() => setIsManualModalOpen(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-[#8E95A2] hover:text-white text-xs font-heading font-medium transition cursor-pointer"
-              title="Ver Manual Técnico y Resumen de Estrategias"
-            >
-              <BookOpen className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Guía Detallada</span>
-            </button>
+                <button
+                  data-tour="privacy-btn"
+                  onClick={togglePrivacyMode}
+                  className={`h-8 sm:h-9 w-8 sm:w-9 rounded-xl border text-xs font-mono transition cursor-pointer flex items-center justify-center ${
+                    isPrivacyMode
+                      ? 'bg-[#FFB800]/20 text-[#FFB800] border-[#FFB800]/40'
+                      : 'bg-white/[0.05] hover:bg-white/[0.1] border-white/[0.08] text-[#8E95A2] hover:text-white'
+                  }`}
+                  title="Modo Privacidad"
+                >
+                  {isPrivacyMode ? <EyeOff className="w-3.5 h-3.5 text-[#FFB800]" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
 
-            <a
-              href={`${API_BASE}/api/v1/manual/download`}
-              download="Manual_RocketBot_Pro_Estrategias_MultiAsset.pdf"
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-white text-xs font-mono font-medium transition cursor-pointer"
-              title="Descargar Manual Técnico e Institucional en PDF"
-            >
-              <Download className="w-3.5 h-3.5 text-[#00DFDF]" />
-              <span className="hidden sm:inline">Manual PDF</span>
-            </a>
+                <button
+                  onClick={() => setIsCorrelationOpen(true)}
+                  className="h-8 sm:h-9 w-8 sm:w-9 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-[#8E95A2] hover:text-white text-xs transition cursor-pointer flex items-center justify-center"
+                  title="Matriz de Correlación Cruzada"
+                >
+                  <Layers className="w-3.5 h-3.5 text-[#0A7CFF]" />
+                </button>
 
-            {/* Menú de Usuario / Perfil RBAC */}
-            {currentUser && (
-              <UserProfileMenu
-                user={currentUser}
-                onOpenUserManagement={() => setIsUserManagementOpen(true)}
-                onOpenChangePassword={() => setIsChangePasswordOpen(true)}
-                onLogout={handleLogout}
-              />
+                <button
+                  onClick={() => setIsPropFirmOpen(true)}
+                  className="h-8 sm:h-9 w-8 sm:w-9 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-[#8E95A2] hover:text-white text-xs transition cursor-pointer flex items-center justify-center"
+                  title="Reglas Prop Firm (FTMO / Apex)"
+                >
+                  <Trophy className="w-3.5 h-3.5 text-[#FFB800]" />
+                </button>
+
+                <button
+                  onClick={() => setIsNotificationsOpen(true)}
+                  className="h-8 sm:h-9 w-8 sm:w-9 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-[#8E95A2] hover:text-white text-xs transition cursor-pointer flex items-center justify-center"
+                  title="Alertas Telegram / Discord"
+                >
+                  <Bell className="w-3.5 h-3.5 text-[#00DFDF]" />
+                </button>
+
+                <button
+                  onClick={() => setIsTourOpen(true)}
+                  className="h-8 sm:h-9 px-2.5 rounded-xl bg-[#0A7CFF]/15 hover:bg-[#0A7CFF]/25 border border-[#0A7CFF]/30 text-[#0A7CFF] text-xs font-heading font-bold transition cursor-pointer flex items-center gap-1"
+                  title="Tour Guiado"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span className="hidden xl:inline">Tour</span>
+                </button>
+              </div>
             )}
+
+            {/* Perfil de Usuario */}
+            {currentUser && (
+              <div className="shrink-0">
+                <UserProfileMenu
+                  user={currentUser}
+                  onOpenUserManagement={() => setIsUserManagementOpen(true)}
+                  onOpenChangePassword={() => setIsChangePasswordOpen(true)}
+                  onLogout={handleLogout}
+                />
+              </div>
+            )}
+
+            {/* Botón Menú Móvil / Drawer para pantallas pequeñas */}
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="lg:hidden h-8 sm:h-9 w-8 sm:w-9 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-white flex items-center justify-center cursor-pointer transition shrink-0"
+              title="Menú de herramientas"
+            >
+              <Menu className="w-4 h-4" />
+            </button>
           </div>
         </div>
+
+        {/* Sub-barra de navegación móvil en modo PRO para alternar Terminal / Backtest / FreqAI */}
+        {experienceMode === 'pro' && (
+          <div className="xl:hidden pt-2 mt-2 border-t border-white/[0.06] flex items-center justify-between gap-2 overflow-x-auto">
+            <nav className="flex items-center figma-tablist-pill w-full sm:w-auto">
+              <button
+                onClick={() => setActiveTab('terminal')}
+                className={`figma-tab-item flex-1 sm:flex-initial text-center ${activeTab === 'terminal' ? 'active' : ''}`}
+              >
+                <Activity className="w-3.5 h-3.5 inline mr-1" />
+                <span>Terminal</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('lab')}
+                className={`figma-tab-item flex-1 sm:flex-initial text-center ${activeTab === 'lab' ? 'active' : ''}`}
+              >
+                <FlaskConical className="w-3.5 h-3.5 inline mr-1" />
+                <span>Backtest</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('freqai')}
+                className={`figma-tab-item flex-1 sm:flex-initial text-center ${activeTab === 'freqai' ? 'active' : ''}`}
+              >
+                <BrainCircuit className="w-3.5 h-3.5 inline mr-1" />
+                <span>FreqAI</span>
+              </button>
+            </nav>
+
+            <div className="hidden sm:block lg:hidden shrink-0">
+              <AccountSwitcherDropdown
+                apiBase={API_BASE}
+                activeAccountId={activeAccountId}
+                isPrivacyMode={isPrivacyMode}
+                token={authToken}
+                onAccountSwitched={handleAccountSwitched}
+                onOpenNewAccountModal={() => setIsNewAccountModalOpen(true)}
+                onOpenMasterModal={() => setIsMasterModalOpen(true)}
+              />
+            </div>
+          </div>
+        )}
       </header>
 
-      {/* Grid de KPIs Directo y Compacto (Sin banners innecesarios) */}
-      <section data-tour="kpi-cards" className="relative z-10 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5 px-4 pt-3">
+      {/* Vista Principiante (Junior) vs Vista Institucional PRO */}
+      {experienceMode === 'junior' ? (
+        <main className="relative z-10 flex-1 py-4">
+          <JuniorDashboardView
+            portfolio={portfolio}
+            openTrades={openTrades}
+            closedTrades={closedTrades}
+            toggleBotState={toggleBotState}
+            toggleDryRunMode={toggleDryRunMode}
+            handleForceExit={handleForceExit}
+            isPrivacyMode={isPrivacyMode}
+            fmtMoney={fmtMoney}
+            onOpenAICopilot={() => setIsAIOpen(true)}
+            onSwitchToPro={() => handleSetExperienceMode('pro')}
+            accountName={portfolio?.name || portfolio?.account_name || activeAccountId}
+          />
+        </main>
+      ) : (
+        <>
+          {/* Grid de KPIs Directo y Compacto (Sin banners innecesarios) */}
+          <section data-tour="kpi-cards" className="relative z-10 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2.5 px-4 pt-3">
         <div className="p-3 figma-card flex items-center justify-between">
           <div>
             <div className="flex items-center gap-1">
@@ -1289,6 +1365,8 @@ export default function App() {
           </div>
         )}
       </main>
+        </>
+      )}
 
       {/* Tour Guiado Interactivo con Globos Flotantes (Speech Bubbles & Spotlight) */}
       <InteractiveTour
@@ -1433,6 +1511,198 @@ export default function App() {
         onConfirm={() => handleSetDryRun(false)}
         accountName={portfolio?.name || portfolio?.account_name || activeAccountId || 'Cuenta Activa'}
       />
+
+      {/* Drawer / Menú Móvil Adaptativo */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="w-full sm:max-w-md bg-[#0C101A] border-t sm:border border-white/[0.12] rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[85vh] overflow-y-auto shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg figma-btn-primary p-0 flex items-center justify-center text-white">
+                  <Rocket className="w-3.5 h-3.5" />
+                </div>
+                <span className="text-sm font-bold font-heading text-white">Menú & Herramientas</span>
+              </div>
+              <button
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="w-8 h-8 rounded-xl bg-white/[0.06] text-[#8E95A2] hover:text-white flex items-center justify-center cursor-pointer transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Selector de Subcuenta Activa */}
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-semibold uppercase text-[#8E95A2] font-heading">
+                Subcuenta Activa
+              </span>
+              <AccountSwitcherDropdown
+                apiBase={API_BASE}
+                activeAccountId={activeAccountId}
+                isPrivacyMode={isPrivacyMode}
+                token={authToken}
+                onAccountSwitched={(acc) => {
+                  handleAccountSwitched(acc);
+                  setIsMobileMenuOpen(false);
+                }}
+                onOpenNewAccountModal={() => {
+                  setIsNewAccountModalOpen(true);
+                  setIsMobileMenuOpen(false);
+                }}
+                onOpenMasterModal={() => {
+                  setIsMasterModalOpen(true);
+                  setIsMobileMenuOpen(false);
+                }}
+              />
+            </div>
+
+            {/* Switch de Modo de Experiencia */}
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-semibold uppercase text-[#8E95A2] font-heading">
+                Modo de Visualización
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleSetExperienceMode('junior');
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className={`h-10 rounded-xl text-xs font-heading font-bold flex items-center justify-center gap-2 border transition cursor-pointer ${
+                    experienceMode === 'junior'
+                      ? 'bg-gradient-to-r from-[#00DFDF]/20 to-[#0A7CFF]/20 text-[#00DFDF] border-[#00DFDF]/40'
+                      : 'bg-white/[0.04] border-white/[0.08] text-[#8E95A2]'
+                  }`}
+                >
+                  <span>🌱 Principiante</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleSetExperienceMode('pro');
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className={`h-10 rounded-xl text-xs font-heading font-bold flex items-center justify-center gap-2 border transition cursor-pointer ${
+                    experienceMode === 'pro'
+                      ? 'figma-btn-primary text-white'
+                      : 'bg-white/[0.04] border-white/[0.08] text-[#8E95A2]'
+                  }`}
+                >
+                  <span>⚡ Modo PRO</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Accesos Rápidos Institucionales */}
+            <div className="space-y-1.5 pt-1">
+              <span className="text-[11px] font-semibold uppercase text-[#8E95A2] font-heading">
+                Controles y Herramientas
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => {
+                    toggleTradingMode();
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="h-10 rounded-xl bg-white/[0.05] border border-white/[0.08] text-xs font-mono font-medium text-white flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <span>{portfolio.trading_mode === 'futures' ? 'FUTURES 3x' : 'SPOT MARKET'}</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    toggleDryRunMode();
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className={`h-10 rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-1.5 border cursor-pointer ${
+                    portfolio.dry_run
+                      ? 'bg-[#0A7CFF]/15 border-[#0A7CFF]/30 text-[#0A7CFF]'
+                      : 'bg-[#FF3B69]/20 border-[#FF3B69]/40 text-[#FF3B69]'
+                  }`}
+                >
+                  <span>{portfolio.dry_run ? 'DRY-RUN' : 'LIVE CAPITAL'}</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsCorrelationOpen(true);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="h-10 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-xs font-heading font-medium text-white flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Layers className="w-4 h-4 text-[#0A7CFF]" />
+                  <span>Correlación</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsPropFirmOpen(true);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="h-10 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-xs font-heading font-medium text-white flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Trophy className="w-4 h-4 text-[#FFB800]" />
+                  <span>Prop Firm</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsNotificationsOpen(true);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="h-10 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-xs font-heading font-medium text-white flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Bell className="w-4 h-4 text-[#00DFDF]" />
+                  <span>Alertas 24/7</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    togglePrivacyMode();
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="h-10 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-xs font-heading font-medium text-white flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {isPrivacyMode ? <EyeOff className="w-4 h-4 text-[#FFB800]" /> : <Eye className="w-4 h-4" />}
+                  <span>{isPrivacyMode ? 'Ver Saldos' : 'Privacidad'}</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsTourOpen(true);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="h-10 rounded-xl bg-[#0A7CFF]/15 hover:bg-[#0A7CFF]/25 border border-[#0A7CFF]/30 text-xs font-heading font-medium text-[#0A7CFF] flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>Tour Guiado</span>
+                </button>
+
+                <a
+                  href={`${API_BASE}/api/v1/manual/download`}
+                  download="Manual_RocketBot_Pro_Estrategias_MultiAsset.pdf"
+                  className="h-10 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-xs font-heading font-medium text-white flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Download className="w-4 h-4 text-[#00DFDF]" />
+                  <span>Manual PDF</span>
+                </a>
+              </div>
+            </div>
+
+            {/* Botón de Emergencia Kill-Switch */}
+            <button
+              onClick={() => {
+                setIsPanicConfirmOpen(true);
+                setIsMobileMenuOpen(false);
+              }}
+              className="w-full h-11 rounded-xl bg-[#FF3B69]/15 hover:bg-[#FF3B69]/25 border border-[#FF3B69]/40 text-[#FF3B69] text-xs font-heading font-bold transition flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <AlertOctagon className="w-4 h-4" />
+              <span>Kill-Switch de Emergencia</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Botón Flotante Permanente de Acceso Rápido al Mentor IA */}
       {!isAIOpen && (
