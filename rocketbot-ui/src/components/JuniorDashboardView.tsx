@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Wallet,
   TrendingUp,
@@ -32,6 +32,7 @@ import {
   X,
   CandlestickChart,
   Lightbulb,
+  Compass,
 } from 'lucide-react';
 import {
   TradingViewChart,
@@ -39,6 +40,8 @@ import {
   type ChartMarker,
   type OpenTradeOverlay,
 } from './TradingViewChart';
+import { InfoTooltip } from './InfoTooltip';
+import { JuniorInteractiveTour } from './JuniorInteractiveTour';
 import { audioFeedback } from '../utils/audioFeedback';
 
 interface JuniorDashboardViewProps {
@@ -82,23 +85,27 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
   markers = [],
   activeTradeForSelectedPair,
 }) => {
-  // Estado local para los 14 puntos
+  // Estado local para los componentes
+  const [isTourOpen, setIsTourOpen] = useState<boolean>(false);
   const [closingTradeId, setClosingTradeId] = useState<number | null>(null);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
-  const [selectedTradeExplanation, setSelectedTradeExplanation] = useState<any | null>(null); // Idea 2
-  const [chartStyle, setChartStyle] = useState<'candles' | 'area'>('candles'); // Idea 6
-  const [riskProfile, setRiskProfile] = useState<'conservative' | 'balanced' | 'growth'>('balanced'); // Idea 3
+  const [selectedTradeExplanation, setSelectedTradeExplanation] = useState<any | null>(null);
+  const [chartStyle, setChartStyle] = useState<'candles' | 'area'>('candles');
+  const [riskProfile, setRiskProfile] = useState<'conservative' | 'balanced' | 'growth'>('balanced');
   const [isNightGuardActive, setIsNightGuardActive] = useState<boolean>(() => {
     return localStorage.getItem('rocketbot_night_guard') === 'true';
-  }); // Idea 4
-  const [dailyTargetAmount, setDailyTargetAmount] = useState<number>(50); // Idea 5
-  const [simulatedCapital, setSimulatedCapital] = useState<number>(1000); // Idea 7
-  const [openLesson, setOpenLesson] = useState<number | null>(null); // Idea 9
-  const [isDailyFlashOpen, setIsDailyFlashOpen] = useState<boolean>(false); // Idea 11
+  });
+  const [dailyTargetAmount, setDailyTargetAmount] = useState<number>(50);
+  const [simulatedCapital, setSimulatedCapital] = useState<number>(1000);
+  const [openLesson, setOpenLesson] = useState<number | null>(null);
+  const [isDailyFlashOpen, setIsDailyFlashOpen] = useState<boolean>(false);
   const [copiedFlash, setCopiedFlash] = useState<boolean>(false);
-  const [isGlossaryOpen, setIsGlossaryOpen] = useState<boolean>(false); // Idea 12
+  const [isGlossaryOpen, setIsGlossaryOpen] = useState<boolean>(false);
   const [glossarySearch, setGlossarySearch] = useState<string>('');
-  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => audioFeedback.getSoundEnabled()); // Idea 13
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => audioFeedback.getSoundEnabled());
+  const [showChecklist, setShowChecklist] = useState<boolean>(() => {
+    return localStorage.getItem('rocketbot_hide_checklist') !== 'true';
+  });
 
   const isRunning = portfolio?.bot_state === 'RUNNING' || portfolio?.state === 'RUNNING';
   const isDryRun = portfolio?.dry_run !== false;
@@ -108,13 +115,11 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
   const totalPnlPct = portfolio?.total_pnl_pct ?? 0;
   const isPnlPositive = totalPnl >= 0;
 
-  // Toggle de sonido con feedback
   const handleToggleSound = () => {
     const next = audioFeedback.toggleSound();
     setSoundEnabled(next);
   };
 
-  // Toggle de modo dormir tranquilo
   const handleToggleNightGuard = () => {
     setIsNightGuardActive((prev) => {
       const next = !prev;
@@ -126,7 +131,6 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
     });
   };
 
-  // Cierre de trade con sonido de seguridad
   const handleCloseClick = async (tradeId: number) => {
     setClosingTradeId(tradeId);
     audioFeedback.playShieldTone();
@@ -138,7 +142,13 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
     }
   };
 
-  // Nombres comerciales y logos (Idea 10)
+  const handleDismissChecklist = () => {
+    setShowChecklist(false);
+    try {
+      localStorage.setItem('rocketbot_hide_checklist', 'true');
+    } catch {}
+  };
+
   const assetInfoMap: Record<string, { label: string; icon: string; desc: string }> = {
     'BTC/USDT': { label: 'Bitcoin', icon: '₿', desc: 'Criptomoneda Reina' },
     'ETH/USDT': { label: 'Ethereum', icon: '⟠', desc: 'Contratos Inteligentes' },
@@ -154,7 +164,6 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
     'NAS100/USD': { label: 'Nasdaq 100', icon: '💻', desc: 'Gigantes Tecnológicos' },
   };
 
-  // Nombres intuitivos de estrategias (Idea 14)
   const getStrategyFriendlyName = (stratName: string = '') => {
     if (stratName.includes('Momentum') || stratName.includes('Index')) {
       return { name: '🚀 Cazador de Tendencias', desc: 'Sigue el impulso de grandes inversores' };
@@ -167,7 +176,6 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
 
   const friendlyStrategy = getStrategyFriendlyName(portfolio?.active_strategy);
 
-  // Gamificación: Nivel de Trader (Idea 8)
   const traderLevel = {
     title: 'Piloto Junior',
     rank: 'Nivel 2',
@@ -180,7 +188,6 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
     ],
   };
 
-  // Micro-Cápsulas de Aprendizaje en 1 minuto (Idea 9)
   const lessons = [
     {
       id: 1,
@@ -202,7 +209,6 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
     },
   ];
 
-  // Diario del Bot: Feed de Actividad en Tiempo Real (Idea 1)
   const botDiaryLogs = [
     {
       time: 'Hace 4 min',
@@ -230,7 +236,6 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
     },
   ];
 
-  // Glosario Interactivo (Idea 12)
   const glossaryTerms = [
     { term: 'Equity', meaning: 'El patrimonio total de tu cuenta: saldo disponible + el valor actual de tus posiciones.' },
     { term: 'Stop Loss', meaning: 'Tu red de seguridad. Si el precio cae a este nivel, se vende automáticamente para proteger tu capital.' },
@@ -247,15 +252,12 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
       t.meaning.toLowerCase().includes(glossarySearch.toLowerCase())
   );
 
-  // Meta Diaria (Idea 5)
   const dailyProgressPct = Math.min(Math.max((Math.abs(totalPnl) / dailyTargetAmount) * 100, 0), 100);
   const isTargetAchieved = totalPnl >= dailyTargetAmount;
 
-  // Calculadora visual interactiva (Idea 7)
   const estMonthlyProfit = (simulatedCapital * 0.06).toFixed(0);
   const maxProtectedRisk = (simulatedCapital * 0.04).toFixed(0);
 
-  // Copiar resumen del día (Idea 11)
   const handleCopyFlash = () => {
     const text = `📊 Resumen RocketBot de Hoy\n• Saldo Total: ${fmtMoney(totalEquity)}\n• Resultado: ${isPnlPositive ? '+' : ''}${fmtMoney(totalPnl)} (${totalPnlPct.toFixed(2)}%)\n• Blindaje: 4% Stop Máximo Diario\n• Tasa de Acierto: ${portfolio?.win_rate ?? 75}%\n🚀 Operando con trading algorítmico institucional.`;
     navigator.clipboard.writeText(text);
@@ -265,9 +267,82 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
 
   return (
     <div className="space-y-6 pb-12 max-w-6xl mx-auto px-4 sm:px-6">
+      {/* 0. GUÍA RÁPIDA / CHECKLIST DE BIENVENIDA ("TU PRIMER VUELO") */}
+      {showChecklist && (
+        <div className="p-4 sm:p-5 figma-card rounded-2xl border border-[#00DFDF]/30 bg-gradient-to-r from-[#00DFDF]/10 via-[#0A7CFF]/5 to-transparent relative overflow-hidden animate-in fade-in duration-200">
+          <button
+            onClick={handleDismissChecklist}
+            className="absolute top-3 right-3 text-[#8E95A2] hover:text-white transition p-1"
+            title="Cerrar guía de bienvenida"
+          >
+            <X className="w-4 h-4" />
+          </button>
+
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-xs font-bold font-heading text-[#00DFDF]">
+                <Compass className="w-4 h-4" />
+                <span>Tu Primer Vuelo en 3 Pasos Simples</span>
+                <InfoTooltip
+                  title="Guía de Inicio Rápido"
+                  description="Tres pasos recomendados para que empieces a usar tu bot con total tranquilidad y cero riesgo."
+                  impact="Te asegura que el simulador esté activo y las protecciones calibradas antes de operar."
+                />
+              </div>
+              <p className="text-xs text-[#EBEEF5] leading-relaxed">
+                ¡Bienvenido a RocketBot! Para empezar con el pie derecho, sigue estos 3 pasos:
+              </p>
+            </div>
+
+            <button
+              onClick={() => {
+                audioFeedback.playClickTick();
+                setIsTourOpen(true);
+              }}
+              className="h-9 px-4 rounded-xl figma-btn-primary text-white text-xs font-heading font-bold transition flex items-center gap-2 cursor-pointer shadow-[0_0_15px_rgba(10,124,255,0.3)] shrink-0 self-start md:self-auto"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Iniciar Tour Guiado</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3 pt-3 border-t border-white/[0.08]">
+            <div className="flex items-start gap-2.5 text-xs text-[#CBD2DF]">
+              <div className="w-5 h-5 rounded-full bg-[#00DFDF]/20 text-[#00DFDF] border border-[#00DFDF]/40 flex items-center justify-center shrink-0 mt-0.5 font-bold font-mono text-[10px]">
+                1
+              </div>
+              <div>
+                <strong className="text-white block font-heading">Modo Práctica Activo</strong>
+                <span className="text-[11px] text-[#8E95A2]">Operas con cotizaciones en vivo y cero riesgo real.</span>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2.5 text-xs text-[#CBD2DF]">
+              <div className="w-5 h-5 rounded-full bg-[#0A7CFF]/20 text-[#0A7CFF] border border-[#0A7CFF]/40 flex items-center justify-center shrink-0 mt-0.5 font-bold font-mono text-[10px]">
+                2
+              </div>
+              <div>
+                <strong className="text-white block font-heading">Elige tu Perfil</strong>
+                <span className="text-[11px] text-[#8E95A2]">Recomendamos empezar en modo Equilibrado.</span>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2.5 text-xs text-[#CBD2DF]">
+              <div className="w-5 h-5 rounded-full bg-[#FFB800]/20 text-[#FFB800] border border-[#FFB800]/40 flex items-center justify-center shrink-0 mt-0.5 font-bold font-mono text-[10px]">
+                3
+              </div>
+              <div>
+                <strong className="text-white block font-heading">Inicia el Bot y Relájate</strong>
+                <span className="text-[11px] text-[#8E95A2]">El bot cuida de tu dinero 24/7 de forma automática.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* BARRA SUPERIOR DE HERRAMIENTAS RÁPIDAS PRINCIPIANTE */}
       <div className="flex flex-wrap items-center justify-between gap-3 p-3 figma-card rounded-2xl border border-white/[0.08] text-xs">
-        {/* Nivel de Trader Badge (Idea 8) */}
+        {/* Nivel de Trader Badge con Tooltip */}
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#FFB800]/20 to-[#0A7CFF]/20 border border-[#FFB800]/40 flex items-center justify-center text-[#FFB800]">
             <Award className="w-3.5 h-3.5" />
@@ -276,44 +351,75 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
             <div className="font-heading font-bold text-white flex items-center gap-1.5">
               <span>{traderLevel.title}</span>
               <span className="text-[10px] text-[#00DFDF] font-mono">({traderLevel.rank})</span>
+              <InfoTooltip
+                title="Rango de Trader Cuantitativo"
+                description="Tu progreso como trader algorítmico a medida que operas en el simulador, completas lecciones y exploras funciones."
+                impact="Te ayuda a aprender de forma segura antes de operar con cuentas de fondeo o capital real."
+              />
             </div>
-            <div className="text-[10px] text-[#8E95A2]">Progreso: {traderLevel.progressPct}%</div>
+            <div className="text-[10px] text-[#8E95A2]">Progreso hacia {traderLevel.nextRank}: {traderLevel.progressPct}%</div>
           </div>
         </div>
 
-        {/* Acciones Rápidas: Sonido, Modo Dormir, Resumen del Día, Glosario */}
+        {/* Acciones Rápidas: Tour, Sonido, Modo Dormir, Resumen del Día, Glosario */}
         <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* Botón de Sonido (Idea 13) */}
+          {/* Botón Tour Principiante */}
           <button
             type="button"
-            onClick={handleToggleSound}
-            className={`h-8 px-2.5 rounded-xl border flex items-center gap-1.5 transition cursor-pointer text-xs ${
-              soundEnabled
-                ? 'bg-[#00DFDF]/10 border-[#00DFDF]/30 text-[#00DFDF]'
-                : 'bg-white/[0.04] border-white/[0.08] text-[#8E95A2]'
-            }`}
-            title={soundEnabled ? 'Sonidos agradables activos' : 'Sonidos desactivados'}
+            onClick={() => {
+              audioFeedback.playClickTick();
+              setIsTourOpen(true);
+            }}
+            className="h-8 px-2.5 sm:px-3 rounded-xl bg-[#00DFDF]/10 hover:bg-[#00DFDF]/20 border border-[#00DFDF]/30 text-[#00DFDF] flex items-center gap-1.5 transition cursor-pointer font-heading font-bold text-xs"
+            title="Abrir el tour interactivo paso a paso para principiantes"
           >
-            {soundEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
-            <span className="hidden sm:inline">{soundEnabled ? 'Sonido ON' : 'Silencio'}</span>
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Tour Guiado</span>
           </button>
 
-          {/* Modo Dormir Tranquilo (Idea 4) */}
-          <button
-            type="button"
-            onClick={handleToggleNightGuard}
-            className={`h-8 px-2.5 rounded-xl border flex items-center gap-1.5 transition cursor-pointer text-xs ${
-              isNightGuardActive
-                ? 'bg-[#925CFF]/20 border-[#925CFF]/40 text-[#925CFF] shadow-[0_0_10px_rgba(146,92,255,0.2)]'
-                : 'bg-white/[0.04] border-white/[0.08] text-[#8E95A2]'
-            }`}
-            title="Pausa nuevas entradas de noche o fines de semana para que descanses tranquilo"
-          >
-            <Moon className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Dormir Tranquilo</span>
-          </button>
+          {/* Botón de Sonido con Tooltip */}
+          <div className="flex items-center">
+            <button
+              type="button"
+              onClick={handleToggleSound}
+              className={`h-8 px-2.5 rounded-xl border flex items-center gap-1.5 transition cursor-pointer text-xs ${
+                soundEnabled
+                  ? 'bg-[#00DFDF]/10 border-[#00DFDF]/30 text-[#00DFDF]'
+                  : 'bg-white/[0.04] border-white/[0.08] text-[#8E95A2]'
+              }`}
+            >
+              {soundEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+              <span className="hidden sm:inline">{soundEnabled ? 'Sonido ON' : 'Silencio'}</span>
+            </button>
+            <InfoTooltip
+              title="Feedback de Audio Agradable"
+              description="Activa o silencia sonidos sintéticos suaves cuando una operación cierra con ganancias o cuando se activan las protecciones."
+              impact="Proporciona una confirmación auditiva tranquila y reconfortante de que tu bot está operando."
+            />
+          </div>
 
-          {/* Glosario Toca para Entender (Idea 12) */}
+          {/* Modo Dormir Tranquilo con Tooltip */}
+          <div className="flex items-center">
+            <button
+              type="button"
+              onClick={handleToggleNightGuard}
+              className={`h-8 px-2.5 rounded-xl border flex items-center gap-1.5 transition cursor-pointer text-xs ${
+                isNightGuardActive
+                  ? 'bg-[#925CFF]/20 border-[#925CFF]/40 text-[#925CFF] shadow-[0_0_10px_rgba(146,92,255,0.2)]'
+                  : 'bg-white/[0.04] border-white/[0.08] text-[#8E95A2]'
+              }`}
+            >
+              <Moon className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Dormir Tranquilo</span>
+            </button>
+            <InfoTooltip
+              title="Modo Dormir Tranquilo (Night Guard)"
+              description="Pausa automáticamente la apertura de nuevas operaciones en horario nocturno (22:00 a 07:00) y fines de semana."
+              impact="Evita que te preocupes por la volatilidad de medianoche. Las operaciones abiertas mantienen sus paradas de Stop Loss activas."
+            />
+          </div>
+
+          {/* Glosario Toca para Entender */}
           <button
             type="button"
             onClick={() => setIsGlossaryOpen(true)}
@@ -324,7 +430,7 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
             <span className="hidden sm:inline">Glosario</span>
           </button>
 
-          {/* Resumen Flash de Hoy (Idea 11) */}
+          {/* Resumen Flash de Hoy */}
           <button
             type="button"
             onClick={() => setIsDailyFlashOpen(true)}
@@ -337,7 +443,10 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
       </div>
 
       {/* 1. HERO DE ESTADO: Semáforo y Control Central */}
-      <div className="p-5 sm:p-6 figma-card border border-white/[0.1] rounded-2xl relative overflow-hidden bg-gradient-to-b from-[#0E1320] to-[#080A10]">
+      <div
+        data-junior-tour="hero"
+        className="p-5 sm:p-6 figma-card border border-white/[0.1] rounded-2xl relative overflow-hidden bg-gradient-to-b from-[#0E1320] to-[#080A10]"
+      >
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2.5">
@@ -356,23 +465,37 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
                 {isRunning ? 'Bot en Funcionamiento' : 'Bot en Pausa'}
               </span>
 
-              <button
-                onClick={toggleDryRunMode}
-                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-semibold transition cursor-pointer ${
-                  isDryRun
-                    ? 'bg-[#0A7CFF]/15 text-[#0A7CFF] border border-[#0A7CFF]/30 hover:bg-[#0A7CFF]/25'
-                    : 'bg-[#FF3B69]/15 text-[#FF3B69] border border-[#FF3B69]/30 hover:bg-[#FF3B69]/25 shadow-[0_0_10px_rgba(255,59,105,0.2)]'
-                }`}
-                title="Haz clic para alternar entre simulación y dinero real"
-              >
-                <Shield className="w-3 h-3" />
-                <span>{isDryRun ? '🛡️ Modo Práctica (Sin Riesgo)' : '⚡ Capital Real Activo'}</span>
-              </button>
+              <div data-junior-tour="practice-mode" className="flex items-center">
+                <button
+                  onClick={toggleDryRunMode}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-semibold transition cursor-pointer ${
+                    isDryRun
+                      ? 'bg-[#0A7CFF]/15 text-[#0A7CFF] border border-[#0A7CFF]/30 hover:bg-[#0A7CFF]/25'
+                      : 'bg-[#FF3B69]/15 text-[#FF3B69] border border-[#FF3B69]/30 hover:bg-[#FF3B69]/25 shadow-[0_0_10px_rgba(255,59,105,0.2)]'
+                  }`}
+                  title="Haz clic para alternar entre simulación y dinero real"
+                >
+                  <Shield className="w-3 h-3" />
+                  <span>{isDryRun ? '🛡️ Modo Práctica (Sin Riesgo)' : '⚡ Capital Real Activo'}</span>
+                </button>
+                <InfoTooltip
+                  title="Modo Práctica (Simulador Dry-Run)"
+                  description="En este modo operas con precios de mercado en tiempo real pero utilizando saldo virtual de práctica. No arriesgas ningún dinero real."
+                  impact="Te permite entrenar y comprobar los resultados antes de activar capital real."
+                />
+              </div>
 
-              {/* Estrategia con Nombre Intuitivo (Idea 14) */}
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/[0.08] text-[11px] text-[#EBEEF5]">
-                <span>{friendlyStrategy.name}</span>
-              </span>
+              {/* Estrategia con Nombre Intuitivo y Tooltip */}
+              <div className="flex items-center">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/[0.08] text-[11px] text-[#EBEEF5]">
+                  <span>{friendlyStrategy.name}</span>
+                </span>
+                <InfoTooltip
+                  title="Estrategia Algorítmica Activa"
+                  description={`${friendlyStrategy.name}: ${friendlyStrategy.desc}. Es el conjunto de reglas matemáticas que usa el bot para entrar y salir del mercado.`}
+                  impact="Opera de forma 100% disciplinada sin intervención manual."
+                />
+              </div>
             </div>
 
             <h1 className="text-xl sm:text-2xl font-bold font-heading text-white tracking-tight">
@@ -424,13 +547,20 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
       </div>
 
       {/* 2. LAS 3 MÉTRICAS ESENCIALES + META DIARIA */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div data-junior-tour="metrics" className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Métrica 1: Tu Dinero Total */}
         <div className="p-5 figma-card rounded-2xl border border-white/[0.08] relative">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-[#8E95A2] uppercase tracking-wider font-heading">
-              Tu Capital Total
-            </span>
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-semibold text-[#8E95A2] uppercase tracking-wider font-heading">
+                Tu Capital Total
+              </span>
+              <InfoTooltip
+                title="Capital Total en Cartera (Equity)"
+                description="La suma de tu saldo en efectivo libre más el valor actual de tus posiciones abiertas en los mercados."
+                impact="Es el patrimonio total disponible en tu subcuenta en este preciso instante."
+              />
+            </div>
             <div className="w-8 h-8 rounded-xl bg-[#0A7CFF]/15 border border-[#0A7CFF]/30 flex items-center justify-center text-[#0A7CFF]">
               <Wallet className="w-4 h-4" />
             </div>
@@ -441,23 +571,34 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
           <div className="mt-2 text-xs text-[#8E95A2] flex items-center gap-1.5 font-mono">
             <span>Saldo libre disponible:</span>
             <span className="text-[#00DFDF] font-semibold">{fmtMoney(freeBalance)}</span>
+            <InfoTooltip
+              title="Saldo Libre en Efectivo"
+              description="Dinero que no está comprometido en ninguna operación y que puedes retirar o usar para nuevas compras."
+            />
           </div>
           <p className="mt-2 text-[11px] text-[#676D79] leading-tight">
             Suma de tu saldo en cuenta más el valor actual de tus posiciones abiertas.
           </p>
         </div>
 
-        {/* Métrica 2: Rendimiento / Meta Diaria (Idea 5) */}
+        {/* Métrica 2: Rendimiento / Meta Diaria */}
         <div className="p-5 figma-card rounded-2xl border border-white/[0.08] relative">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-[#8E95A2] uppercase tracking-wider font-heading flex items-center gap-1.5">
-              <span>Resultado Hoy</span>
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-semibold text-[#8E95A2] uppercase tracking-wider font-heading">
+                Resultado Hoy
+              </span>
               {isTargetAchieved && (
                 <span className="text-[10px] text-[#00DFDF] bg-[#00DFDF]/15 px-1.5 py-0.2 rounded font-bold">
                   ¡Meta Lograda! 🎉
                 </span>
               )}
-            </span>
+              <InfoTooltip
+                title="Ganancia / Pérdida Neta de Hoy"
+                description="Resultado acumulado generado por las operaciones cerradas durante la sesión de hoy."
+                impact="Un resultado positivo superior al 2% diario ya supera con creces los promedios bancarios."
+              />
+            </div>
             <div
               className={`w-8 h-8 rounded-xl flex items-center justify-center ${
                 isPnlPositive
@@ -482,11 +623,18 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
               {totalPnlPct.toFixed(2)}%)
             </span>
           </div>
-          
-          {/* Barra de progreso de la Meta Diaria (Idea 5) */}
+
+          {/* Barra de progreso de la Meta Diaria */}
           <div className="mt-2 space-y-1">
             <div className="flex items-center justify-between text-[11px] text-[#8E95A2]">
-              <span>Meta diaria: ${dailyTargetAmount} USD</span>
+              <div className="flex items-center gap-1">
+                <span>Meta diaria: ${dailyTargetAmount} USD</span>
+                <InfoTooltip
+                  title="Meta Diaria con Auto-Refugio"
+                  description="Fija una meta realista para la sesión. Cuando la alcanzas, el bot te aconseja pausar para asegurar tus ganancias."
+                  impact="Te protege del sobre-trading y la codicia después de una buena racha."
+                />
+              </div>
               <span className="font-mono text-white font-bold">{dailyProgressPct.toFixed(0)}%</span>
             </div>
             <div className="w-full h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
@@ -498,18 +646,25 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
           </div>
         </div>
 
-        {/* Métrica 3: Blindaje de Riesgo y Selector de Perfil (Idea 3) */}
-        <div className="p-5 figma-card rounded-2xl border border-white/[0.08] relative">
+        {/* Métrica 3: Blindaje de Riesgo y Selector de Perfil */}
+        <div data-junior-tour="risk-slider" className="p-5 figma-card rounded-2xl border border-white/[0.08] relative">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-[#8E95A2] uppercase tracking-wider font-heading">
-              Perfil de Riesgo
-            </span>
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-semibold text-[#8E95A2] uppercase tracking-wider font-heading">
+                Perfil de Riesgo
+              </span>
+              <InfoTooltip
+                title="Configuración de Perfil de Riesgo"
+                description="Regula qué porcentaje de capital se arriesga en cada trade y qué tan estrictas son las paradas de pérdida."
+                impact="Conservador opera solo al contado (Spot); Equilibrado es la recomendación óptima para principiantes."
+              />
+            </div>
             <div className="w-8 h-8 rounded-xl bg-[#00DFDF]/15 border border-[#00DFDF]/30 flex items-center justify-center text-[#00DFDF]">
               <ShieldCheck className="w-4 h-4" />
             </div>
           </div>
 
-          {/* Slider de 3 botones de perfil de riesgo (Idea 3) */}
+          {/* Slider de 3 botones de perfil de riesgo */}
           <div className="grid grid-cols-3 gap-1 p-1 bg-white/[0.04] rounded-xl border border-white/[0.06] mb-2.5">
             <button
               type="button"
@@ -563,8 +718,8 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
         </div>
       </div>
 
-      {/* 3. GRÁFICO EN VIVO: Alternancia "Velas" vs "Línea con Brillo" (Idea 6 y 10) */}
-      <div className="p-4 sm:p-5 figma-card rounded-2xl border border-white/[0.08] space-y-3.5">
+      {/* 3. GRÁFICO EN VIVO: Alternancia "Velas" vs "Línea con Brillo" */}
+      <div data-junior-tour="chart" className="p-4 sm:p-5 figma-card rounded-2xl border border-white/[0.08] space-y-3.5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
@@ -574,13 +729,18 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
                 <span>{assetInfoMap[selectedPair]?.label || selectedPair}</span>
                 <span className="text-xs text-[#8E95A2] font-mono font-normal">({selectedPair})</span>
               </h2>
+              <InfoTooltip
+                title={`Gráfico en Tiempo Real de ${assetInfoMap[selectedPair]?.label || selectedPair}`}
+                description="Muestra los ticks exactos de precio. Las flechas verdes son puntos donde el bot compró y las rojas donde tomó ganancias."
+                impact="Te permite auditar con tus propios ojos cada operación del algoritmo."
+              />
             </div>
             <p className="text-xs text-[#8E95A2] mt-0.5">
               {assetInfoMap[selectedPair]?.desc || 'Activo en supervisión algorítmica continua.'}
             </p>
           </div>
 
-          {/* Selector de Estilo de Gráfico (Idea 6) + Selector de Activos Populares (Idea 10) */}
+          {/* Selector de Estilo de Gráfico + Selector de Activos Populares */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
             {/* Switch de Velas vs Línea Suave */}
             <div className="flex items-center p-0.5 rounded-xl bg-white/[0.05] border border-white/[0.08] shrink-0">
@@ -618,7 +778,7 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
               </button>
             </div>
 
-            {/* Chips de Activos Populares (Idea 10) */}
+            {/* Chips de Activos Populares */}
             <div className="flex items-center gap-1">
               {['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'XAU/USD', 'NAS100/USD'].map((p) => {
                 const isSelected = selectedPair === p;
@@ -677,14 +837,19 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
         </div>
       </div>
 
-      {/* 4. EL "DIARIO DEL BOT" EN LENGUAJE HUMANO (Idea 1) */}
-      <div className="p-5 figma-card rounded-2xl border border-white/[0.08] space-y-3">
+      {/* 4. EL "DIARIO DEL BOT" EN LENGUAJE HUMANO */}
+      <div data-junior-tour="diary" className="p-5 figma-card rounded-2xl border border-white/[0.08] space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4 text-[#00DFDF]" />
             <h2 className="text-sm sm:text-base font-bold font-heading text-white">
               Diario de Actividad del Bot (En Español Claro)
             </h2>
+            <InfoTooltip
+              title="Bitácora de Decisiones del Algoritmo"
+              description="Un registro cronológico escrito en lenguaje sencillo que te cuenta exactamente qué está haciendo el bot en segundo plano."
+              impact="Elimina la sensación de 'caja negra' y te mantiene informado sin que tengas que descifrar códigos."
+            />
           </div>
           <span className="text-[10px] text-[#8E95A2] font-mono">Actualización en vivo</span>
         </div>
@@ -703,16 +868,18 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
         </div>
       </div>
 
-      {/* 5. OPERACIONES EN CURSO CON BOTÓN "¿POR QUÉ COMPRASTE AQUÍ?" (Idea 2 y 10) */}
-      <div className="space-y-3">
+      {/* 5. OPERACIONES EN CURSO CON BOTÓN "¿POR QUÉ COMPRASTE AQUÍ?" */}
+      <div data-junior-tour="trades" className="space-y-3">
         <div className="flex items-center justify-between">
-          <div>
+          <div className="flex items-center gap-2">
             <h2 className="text-base sm:text-lg font-bold font-heading text-white">
               Operaciones en Curso ({openTrades.length})
             </h2>
-            <p className="text-xs text-[#8E95A2]">
-              Tus posiciones activas. Puedes consultar la explicación de cada trade con un solo toque.
-            </p>
+            <InfoTooltip
+              title="Posiciones de Mercado Activas"
+              description="Operaciones que el bot mantiene vivas en este instante. Cada trade tiene un Stop Loss para cortar pérdidas y un Take Profit para asegurar beneficios."
+              impact="Puedes consultar la explicación de cada entrada con el botón '¿Por qué compraste?'."
+            />
           </div>
         </div>
 
@@ -798,7 +965,7 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {/* Botón "¿Por qué compraste aquí?" (Idea 2) */}
+                      {/* Botón "¿Por qué compraste aquí?" */}
                       <button
                         type="button"
                         onClick={(e) => {
@@ -841,15 +1008,22 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
         )}
       </div>
 
-      {/* 6. SIMULADOR INTERACTIVO "¿QUÉ PASARÍA SI...?" (Idea 7) */}
+      {/* 6. SIMULADOR INTERACTIVO "¿QUÉ PASARÍA SI...?" */}
       <div className="p-5 sm:p-6 figma-card rounded-2xl border border-white/[0.08] space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Calculator className="w-5 h-5 text-[#0A7CFF]" />
             <div>
-              <h2 className="text-base sm:text-lg font-bold font-heading text-white">
-                Simulador de Capital: ¿Qué pasaría si comienzo con...?
-              </h2>
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-base sm:text-lg font-bold font-heading text-white">
+                  Simulador de Capital: ¿Qué pasaría si comienzo con...?
+                </h2>
+                <InfoTooltip
+                  title="Calculadora de Proyección Realista"
+                  description="Calcula cuánto rendimiento estimado generaría el bot cada mes y cuál sería la pérdida máxima protegida en el peor de los casos."
+                  impact="Ayuda a fijar expectativas matemáticas objetivas sin falsas ilusiones."
+                />
+              </div>
               <p className="text-xs text-[#8E95A2]">
                 Calcula proyecciones matemáticas realistas basadas en el historial del bot.
               </p>
@@ -901,7 +1075,7 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
         </div>
       </div>
 
-      {/* 7. MICRO-CÁPSULAS DE APRENDIZAJE EN 60 SEGUNDOS (Idea 9) */}
+      {/* 7. MICRO-CÁPSULAS DE APRENDIZAJE EN 60 SEGUNDOS */}
       <div className="p-5 sm:p-6 figma-card rounded-2xl border border-white/[0.08] space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -909,6 +1083,10 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
             <h2 className="text-base sm:text-lg font-bold font-heading text-white">
               Academia RocketBot: Aprende en 60 Segundos
             </h2>
+            <InfoTooltip
+              title="Educación Rápida para Nuevos Traders"
+              description="Consejos de oro condensados en lecturas de 1 minuto para acelerar tu entendimiento de los mercados sin aburrirte."
+            />
           </div>
           <span className="text-xs text-[#8E95A2]">3 lecciones esenciales</span>
         </div>
@@ -943,11 +1121,16 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
       </div>
 
       {/* 8. EL ESCUDO PROTECTOR (4 Reglas Explicadas Sin Tecnicismos) */}
-      <div className="p-5 sm:p-6 figma-card rounded-2xl border border-white/[0.08] space-y-4">
+      <div data-junior-tour="shields" className="p-5 sm:p-6 figma-card rounded-2xl border border-white/[0.08] space-y-4">
         <div>
           <h2 className="text-base sm:text-lg font-bold font-heading text-white flex items-center gap-2">
             <Shield className="w-5 h-5 text-[#00DFDF]" />
             <span>Cómo te cuida RocketBot: 4 Escudos Automáticos</span>
+            <InfoTooltip
+              title="Red de Protección Cuantitativa 24/7"
+              description="Cuatro algoritmos de vigilancia que garantizan matemáticamente que ningún movimiento brusco del mercado pueda liquidar tu cuenta."
+              impact="Operan en todo momento en segundo plano con latencia inferior a 10 milisegundos."
+            />
           </h2>
           <p className="text-xs text-[#8E95A2] mt-0.5">
             Estas reglas institucionales operan 24/7 para garantizar que jamás pongas en riesgo tu patrimonio.
@@ -1018,7 +1201,10 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
         </button>
       </div>
 
-      {/* MODAL 1: "¿POR QUÉ COMPRASTE AQUÍ?" (Idea 2) */}
+      {/* TOUR INTERACTIVO DE PRINCIPIANTE (Globo Flotante & Spotlight) */}
+      <JuniorInteractiveTour isOpen={isTourOpen} onClose={() => setIsTourOpen(false)} />
+
+      {/* MODAL 1: "¿POR QUÉ COMPRASTE AQUÍ?" */}
       {selectedTradeExplanation && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
           <div className="w-full max-w-md bg-[#0C101A] border border-[#00DFDF]/40 rounded-2xl p-5 space-y-4 shadow-2xl">
@@ -1068,7 +1254,7 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
         </div>
       )}
 
-      {/* MODAL 2: RESUMEN FLASH DEL DÍA (Idea 11) */}
+      {/* MODAL 2: RESUMEN FLASH DEL DÍA */}
       {isDailyFlashOpen && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
           <div className="w-full max-w-sm bg-gradient-to-b from-[#101726] to-[#0A0D14] border border-[#00DFDF]/40 rounded-2xl p-6 space-y-5 text-center shadow-2xl relative">
@@ -1132,7 +1318,7 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
         </div>
       )}
 
-      {/* MODAL 3: GLOSARIO TOCA PARA ENTENDER (Idea 12) */}
+      {/* MODAL 3: GLOSARIO TOCA PARA ENTENDER */}
       {isGlossaryOpen && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
           <div className="w-full max-w-lg bg-[#0C101A] border border-white/[0.12] rounded-2xl p-5 space-y-4 max-h-[85vh] overflow-y-auto shadow-2xl">
