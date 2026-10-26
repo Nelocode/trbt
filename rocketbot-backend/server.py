@@ -1282,30 +1282,6 @@ async def create_new_account(payload: CreateAccountPayload):
     }
 
 
-@app.delete("/api/v1/accounts/{account_id}")
-async def delete_account_endpoint(account_id: str):
-    """Elimina una cuenta y borra sus archivos de disco (salvo si es la única)."""
-    try:
-        deleted = multi_account_pool.delete_account(account_id)
-        if not deleted:
-            raise HTTPException(status_code=404, detail="Cuenta no encontrada.")
-        return {
-            "status": "deleted",
-            "active_account_id": multi_account_pool.active_account_id,
-            "accounts": multi_account_pool.list_accounts_summary(),
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@app.get("/api/v1/accounts/master-consolidated")
-async def get_master_consolidated(authorization: Optional[str] = Header(None)):
-    """Devuelve la vista institucional consolidada con métricas agregadas de todas las cuentas (Solo Administradores)."""
-    require_admin(authorization)
-    multi_account_pool.recalculate_all_accounts(orchestrator.market.live_prices)
-    return multi_account_pool.get_consolidated_master_summary()
-
-
 class ResetAccountPayload(BaseModel):
     account_id: Optional[str] = None
     new_balance: Optional[float] = 10000.0
@@ -1343,6 +1319,30 @@ async def reset_account_endpoint(payload: ResetAccountPayload = Body(...), autho
         "account": acc.to_dict(),
         "accounts": multi_account_pool.list_accounts_summary(),
     }
+
+
+@app.get("/api/v1/accounts/master-consolidated")
+async def get_master_consolidated(authorization: Optional[str] = Header(None)):
+    """Devuelve la vista institucional consolidada con métricas agregadas de todas las cuentas (Solo Administradores)."""
+    require_admin(authorization)
+    multi_account_pool.recalculate_all_accounts(orchestrator.market.live_prices)
+    return multi_account_pool.get_consolidated_master_summary()
+
+
+@app.delete("/api/v1/accounts/{account_id}")
+async def delete_account_endpoint(account_id: str):
+    """Elimina una cuenta y borra sus archivos de disco (salvo si es la única)."""
+    try:
+        deleted = multi_account_pool.delete_account(account_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Cuenta no encontrada.")
+        return {
+            "status": "deleted",
+            "active_account_id": multi_account_pool.active_account_id,
+            "accounts": multi_account_pool.list_accounts_summary(),
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # ---------------------------------------------------------------------------
