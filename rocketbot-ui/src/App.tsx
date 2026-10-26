@@ -57,6 +57,7 @@ import { ForceChangePasswordModal } from './components/ForceChangePasswordModal'
 import { ConfirmLiveCapitalModal } from './components/ConfirmLiveCapitalModal';
 import { AchievementToast } from './components/AchievementToast';
 import { AchievementsModal } from './components/AchievementsModal';
+import { EngineStartWizardModal } from './components/EngineStartWizardModal';
 import { achievementsService } from './utils/achievementsService';
 
 // Auto-detección dinámica para producción en Docker, Easypanel o desarrollo local
@@ -123,6 +124,7 @@ export default function App() {
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState<boolean>(false);
   const [isConfirmLiveOpen, setIsConfirmLiveOpen] = useState<boolean>(false);
   const [isAchievementsOpen, setIsAchievementsOpen] = useState<boolean>(false);
+  const [isEngineWizardOpen, setIsEngineWizardOpen] = useState<boolean>(false);
   const [unlockedCount, setUnlockedCount] = useState<number>(() => achievementsService.getStats().unlockedCount);
 
   // Suscribirse a cambios de logros y gamificación
@@ -381,6 +383,15 @@ export default function App() {
         setClosedTrades(data.closed_trades);
         setRadarSignals(data.radar);
         setFreqaiPredictions(data.freqai_predictions || []);
+
+        // Auto-activar asistente de Puesta a Punto en cuentas nuevas o limpias sin arrancar
+        if (
+          localStorage.getItem('rocketbot_engine_started') !== 'true' &&
+          (!data.open_trades || data.open_trades.length === 0) &&
+          (!data.closed_trades || data.closed_trades.length === 0)
+        ) {
+          setIsEngineWizardOpen(true);
+        }
       }
       try {
         const kRes = await fetch(`${API_BASE}/api/v1/risk/kelly-sizing`, { headers });
@@ -521,6 +532,52 @@ export default function App() {
       await fetchOverview();
     }
   }
+
+  const handleEngineStarted = async (config: {
+    botName: string;
+    dryRun: boolean;
+    riskProfile: 'conservative' | 'balanced' | 'growth';
+    dailyTarget: number;
+    nightGuard: boolean;
+  }) => {
+    try {
+      await fetch(`${API_BASE}/api/v1/bot/control`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
+        body: JSON.stringify({ state: 'RUNNING', dry_run: config.dryRun }),
+      });
+      await fetchOverview();
+    } catch {}
+  };
+
+  const handleFactoryReset = async () => {
+    if (
+      !window.confirm(
+        '¿Restablecer tu robot a estado de fábrica?\n\nSe borrarán todas las operaciones previas y tu saldo volverá a $10,000.00 USD limpios para comenzar de cero.',
+      )
+    ) {
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/accounts/reset`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
+        body: JSON.stringify({ account_id: activeAccountId, new_balance: 10000.0 }),
+      });
+      if (res.ok) {
+        localStorage.removeItem('rocketbot_engine_started');
+        achievementsService.resetAll();
+        await fetchOverview();
+        setIsEngineWizardOpen(true);
+      }
+    } catch {}
+  };
 
   const activeTradeForSelectedPair: OpenTradeOverlay | undefined = openTrades.find(
     (t) => t.pair === selectedPair,
@@ -674,6 +731,16 @@ export default function App() {
                   <span className="hidden sm:inline">PAUSADO</span>
                 </>
               )}
+            </button>
+
+            {/* Botón Puesta a Punto / Arrancar Motores */}
+            <button
+              onClick={() => setIsEngineWizardOpen(true)}
+              className="h-8 sm:h-9 px-2.5 sm:px-3 rounded-xl bg-gradient-to-r from-emerald-500/15 to-teal-500/10 hover:from-emerald-500/25 hover:to-teal-500/20 border border-emerald-500/35 text-emerald-300 text-xs font-heading font-bold transition cursor-pointer flex items-center gap-1.5 shadow-[0_0_12px_rgba(16,185,129,0.15)] shrink-0"
+              title="Puesta a punto y arranque de motores"
+            >
+              <Rocket className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="hidden lg:inline">Puesta a Punto</span>
             </button>
 
             {/* Botón Mentor IA (Uniforme h-8 sm:h-9) */}
@@ -844,6 +911,8 @@ export default function App() {
             onSwitchToPro={() => handleSetExperienceMode('pro')}
             onOpenAchievements={() => setIsAchievementsOpen(true)}
             onQuickOrder={handleQuickOrder}
+            onOpenEngineWizard={() => setIsEngineWizardOpen(true)}
+            onFactoryReset={handleFactoryReset}
             accountName={portfolio?.name || portfolio?.account_name || activeAccountId}
             selectedPair={selectedPair}
             setSelectedPair={setSelectedPair}
@@ -1660,6 +1729,22 @@ export default function App() {
 
                 <button
                   onClick={() => {
+                    setIsEngineWizardOpen(true);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="col-span-2 h-10 rounded-xl bg-gradient-to-r from-emerald-500/20 to-teal-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-heading font-bold flex items-center justify-between px-3 cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    <Rocket className="w-4 h-4 text-emerald-400" />
+                    <span>Puesta a Punto & Arrancar Motores</span>
+                  </div>
+                  <span className="text-[10px] font-mono bg-emerald-400/25 text-emerald-200 px-2 py-0.5 rounded">
+                    SETUP
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => {
                     setIsAchievementsOpen(true);
                     setIsMobileMenuOpen(false);
                   }}
@@ -1788,6 +1873,15 @@ export default function App() {
       <AchievementsModal
         isOpen={isAchievementsOpen}
         onClose={() => setIsAchievementsOpen(false)}
+      />
+
+      {/* Asistente de Puesta a Punto & Arrancar Motores */}
+      <EngineStartWizardModal
+        isOpen={isEngineWizardOpen}
+        onClose={() => setIsEngineWizardOpen(false)}
+        onEngineStarted={handleEngineStarted}
+        currentAccountName={portfolio?.name || portfolio?.account_name}
+        isDryRun={portfolio?.dry_run !== false}
       />
     </div>
   );

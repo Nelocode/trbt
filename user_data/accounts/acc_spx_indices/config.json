@@ -11,7 +11,7 @@
   "leverage": 2.0,
   "max_open_trades": 4,
   "stake_amount": 1500.0,
-  "state": "RUNNING",
+  "state": "PAUSED",
   "prop_firm_rules": {
     "max_daily_loss_pct": 5.0,
     "max_total_loss_pct": 10.0,

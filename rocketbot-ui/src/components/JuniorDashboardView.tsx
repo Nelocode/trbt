@@ -34,6 +34,8 @@ import {
   Lightbulb,
   Compass,
   Trophy,
+  Rocket,
+  RotateCcw,
 } from 'lucide-react';
 import {
   TradingViewChart,
@@ -59,6 +61,8 @@ interface JuniorDashboardViewProps {
   onSwitchToPro: () => void;
   onOpenAchievements?: () => void;
   onQuickOrder?: (pair: string, side: 'long' | 'short') => Promise<void>;
+  onOpenEngineWizard?: () => void;
+  onFactoryReset?: () => void;
   accountName?: string;
   selectedPair?: string;
   setSelectedPair?: (pair: string) => void;
@@ -82,6 +86,8 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
   onSwitchToPro,
   onOpenAchievements,
   onQuickOrder,
+  onOpenEngineWizard,
+  onFactoryReset,
   accountName = 'Mi Cuenta de Trading',
   selectedPair = 'BTC/USDT',
   setSelectedPair,
@@ -382,6 +388,23 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
 
         {/* Acciones Rápidas: Tour, Sonido, Modo Dormir, Resumen del Día, Glosario */}
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Botón Puesta a Punto / Arrancar Motores */}
+          {onOpenEngineWizard && (
+            <button
+              type="button"
+              onClick={() => {
+                audioFeedback.playClickTick();
+                onOpenEngineWizard();
+              }}
+              className="h-8 px-2.5 sm:px-3 rounded-xl bg-gradient-to-r from-emerald-500/20 to-teal-500/15 hover:from-emerald-500/30 hover:to-teal-500/25 border border-emerald-500/40 text-emerald-300 flex items-center gap-1.5 transition cursor-pointer font-heading font-bold text-xs shadow-[0_0_12px_rgba(16,185,129,0.2)]"
+              title="Asistente de Puesta a Punto y Arranque de Motores"
+            >
+              <Rocket className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="hidden sm:inline">Puesta a Punto</span>
+              <span className="sm:hidden">Motores</span>
+            </button>
+          )}
+
           {/* Botón Sala de Trofeos (200 Logros) */}
           <button
             type="button"
@@ -479,6 +502,22 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
             <Share2 className="w-3.5 h-3.5" />
             <span>Resumen Hoy</span>
           </button>
+
+          {/* Botón Reinicio Limpio de Fábrica */}
+          {onFactoryReset && (
+            <button
+              type="button"
+              onClick={() => {
+                audioFeedback.playClickTick();
+                onFactoryReset();
+              }}
+              className="h-8 px-2 sm:px-2.5 rounded-xl bg-white/[0.04] hover:bg-red-500/15 border border-white/[0.08] hover:border-red-500/30 text-slate-400 hover:text-red-300 flex items-center gap-1 transition cursor-pointer text-xs"
+              title="Restablecer cuenta a estado de fábrica (limpia)"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span className="hidden lg:inline">Reiniciar</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -969,6 +1008,21 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
                   >
                     <span>🥇 Abrir Práctica en Oro (XAU)</span>
                   </button>
+
+                  {/* Si el bot está en pausa o nuevo, ofrecer Puesta a Punto */}
+                  {onOpenEngineWizard && !isRunning && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        audioFeedback.playClickTick();
+                        onOpenEngineWizard();
+                      }}
+                      className="h-8 px-3 rounded-xl bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 hover:to-teal-500/30 border border-emerald-500/40 text-emerald-300 text-xs font-heading font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+                    >
+                      <Rocket className="w-3.5 h-3.5" />
+                      <span>⚙️ Puesta a Punto & Arrancar Motores</span>
+                    </button>
+                  )}
                 </div>
               </div>
             )}

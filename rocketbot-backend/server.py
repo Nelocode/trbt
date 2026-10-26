@@ -570,7 +570,7 @@ class RocketFreqAIEngine:
 # ---------------------------------------------------------------------------
 class RocketBotOrchestrator:
     def __init__(self) -> None:
-        self.state = "RUNNING"  # RUNNING | PAUSED | STOPPED
+        self.state = "PAUSED"  # Estado inicial en espera de Puesta a Punto y Arranque de Motores
         self.trading_mode = "futures"  # futures | spot
         self.margin_mode = "isolated"
         self.dry_run = True
@@ -578,7 +578,7 @@ class RocketBotOrchestrator:
         self.active_strategy_name = "RocketMultiFactorV1"
         self.timeframe = "5m"
         self.starting_balance = 10000.0
-        self.realized_pnl = 418.65
+        self.realized_pnl = 0.0
         self.max_open_trades = 5
 
         self.market = MarketDataEngine()
@@ -586,12 +586,12 @@ class RocketBotOrchestrator:
         self.radar_signals: Dict[str, Dict[str, Any]] = {}
         self.analyzed_dfs: Dict[str, pd.DataFrame] = {}
 
-        # Operaciones iniciales en curso (Dry-Run realista y manipulable en vivo)
+        # Operaciones limpias sin datos residuales
         self.open_trades: List[Dict[str, Any]] = []
         self.closed_trades: List[Dict[str, Any]] = []
         self.backtest_history: List[Dict[str, Any]] = []
         self.hyperopt_results: List[Dict[str, Any]] = []
-        self._trade_id_seq = 104
+        self._trade_id_seq = 100
 
     async def initialize(self) -> None:
         await self.market.init_exchange("binance")
@@ -599,165 +599,8 @@ class RocketBotOrchestrator:
         self._seed_initial_trades()
 
     def _seed_initial_trades(self) -> None:
-        btc_price = self.market.live_prices.get("BTC/USDT", 91450.0)
-        xau_price = self.market.live_prices.get("XAU/USD", 2735.40)
-        eur_price = self.market.live_prices.get("EUR/USD", 1.0845)
-        spx_price = self.market.live_prices.get("SPX500/USD", 5845.0)
-
-        self.open_trades = [
-            # 1. Criptomoneda: Bitcoin (Estrategia RocketMultiFactorV1)
-            {
-                "trade_id": 101,
-                "pair": "BTC/USDT",
-                "side": "long",
-                "is_short": False,
-                "leverage": 3.0,
-                "stake_amount": 600.0,
-                "position_Value": 1800.0,
-                "amount": round(1800.0 / (btc_price * 0.988), 5),
-                "open_rate": round(btc_price * 0.988, 2),
-                "current_rate": round(btc_price, 2),
-                "stoploss_rate": round(btc_price * 0.968, 2),
-                "take_profit_rate": round(btc_price * 1.028, 2),
-                "liquidation_rate": round(btc_price * 0.68, 2),
-                "dca_next_rate": round(btc_price * 0.975, 2),
-                "dca_count": 1,
-                "max_dca": 2,
-                "enter_tag": "MultiFactor_Pullback_Long",
-                "open_date": "2026-10-20T12:15:00Z",
-                "strategy": "RocketMultiFactorV1",
-            },
-            # 2. Materia Prima: Oro Spot (Estrategia CommodityTrendBreakoutV1)
-            {
-                "trade_id": 102,
-                "pair": "XAU/USD",
-                "side": "long",
-                "is_short": False,
-                "leverage": 5.0,
-                "stake_amount": 500.0,
-                "position_Value": 2500.0,
-                "amount": round(2500.0 / (xau_price * 0.992), 3),
-                "open_rate": round(xau_price * 0.992, 2),
-                "current_rate": round(xau_price, 2),
-                "stoploss_rate": round(xau_price * 0.978, 2),
-                "take_profit_rate": round(xau_price * 1.025, 2),
-                "liquidation_rate": round(xau_price * 0.82, 2),
-                "dca_next_rate": round(xau_price * 0.984, 2),
-                "dca_count": 0,
-                "max_dca": 2,
-                "enter_tag": "Commodity_Trend_Breakout_Long",
-                "open_date": "2026-10-20T13:05:00Z",
-                "strategy": "CommodityTrendBreakoutV1",
-            },
-            # 3. Divisa Forex: Euro / Dólar (Estrategia ForexMeanReversionV1)
-            {
-                "trade_id": 103,
-                "pair": "EUR/USD",
-                "side": "long",
-                "is_short": False,
-                "leverage": 10.0,
-                "stake_amount": 400.0,
-                "position_Value": 4000.0,
-                "amount": round(4000.0 / (eur_price * 0.996), 2),
-                "open_rate": round(eur_price * 0.996, 5),
-                "current_rate": round(eur_price, 5),
-                "stoploss_rate": round(eur_price * 0.988, 5),
-                "take_profit_rate": round(eur_price * 1.012, 5),
-                "liquidation_rate": round(eur_price * 0.91, 5),
-                "dca_next_rate": round(eur_price * 0.992, 5),
-                "dca_count": 0,
-                "max_dca": 2,
-                "enter_tag": "Forex_MeanReversion_Long",
-                "open_date": "2026-10-20T13:40:00Z",
-                "strategy": "ForexMeanReversionV1",
-            },
-            # 4. Índice Bursátil: S&P 500 (Estrategia IndexMomentumV1)
-            {
-                "trade_id": 104,
-                "pair": "SPX500/USD",
-                "side": "long",
-                "is_short": False,
-                "leverage": 5.0,
-                "stake_amount": 500.0,
-                "position_Value": 2500.0,
-                "amount": round(2500.0 / (spx_price * 0.994), 2),
-                "open_rate": round(spx_price * 0.994, 1),
-                "current_rate": round(spx_price, 1),
-                "stoploss_rate": round(spx_price * 0.982, 1),
-                "take_profit_rate": round(spx_price * 1.022, 1),
-                "liquidation_rate": round(spx_price * 0.81, 1),
-                "dca_next_rate": round(spx_price * 0.988, 1),
-                "dca_count": 0,
-                "max_dca": 2,
-                "enter_tag": "Index_Pullback_Long",
-                "open_date": "2026-10-20T14:10:00Z",
-                "strategy": "IndexMomentumV1",
-            },
-        ]
-
-        self.closed_trades = [
-            {
-                "trade_id": 96,
-                "pair": "WTI/USD",
-                "side": "long",
-                "leverage": 4.0,
-                "stake_amount": 400.0,
-                "open_rate": 69.80,
-                "close_rate": 72.45,
-                "profit_pct": 15.18,
-                "profit_abs": 60.72,
-                "enter_tag": "Commodity_Trend_Breakout_Long",
-                "exit_reason": "TakeProfit_ATR_Target",
-                "open_date": "2026-10-19T14:20:00Z",
-                "close_date": "2026-10-19T18:10:00Z",
-            },
-            {
-                "trade_id": 97,
-                "pair": "GBP/USD",
-                "side": "long",
-                "leverage": 10.0,
-                "stake_amount": 350.0,
-                "open_rate": 1.2890,
-                "close_rate": 1.2975,
-                "profit_pct": 6.59,
-                "profit_abs": 23.07,
-                "enter_tag": "Forex_MeanReversion_Long",
-                "exit_reason": "MiddleBand_Reversion",
-                "open_date": "2026-10-19T22:00:00Z",
-                "close_date": "2026-10-20T01:45:00Z",
-            },
-            {
-                "trade_id": 98,
-                "pair": "NAS100/USD",
-                "side": "long",
-                "leverage": 5.0,
-                "stake_amount": 450.0,
-                "open_rate": 19950.0,
-                "close_rate": 20280.0,
-                "profit_pct": 8.27,
-                "profit_abs": 37.22,
-                "enter_tag": "Index_Pullback_Long",
-                "exit_reason": "Overbought_Target",
-                "open_date": "2026-10-20T03:15:00Z",
-                "close_date": "2026-10-20T07:50:00Z",
-            },
-            {
-                "trade_id": 99,
-                "pair": "BTC/USDT",
-                "side": "long",
-                "leverage": 3.0,
-                "stake_amount": 500.0,
-                "open_rate": 88400.0,
-                "close_rate": 91200.0,
-                "profit_pct": 9.50,
-                "profit_abs": 47.50,
-                "enter_tag": "MultiFactor_Pullback_Long",
-                "exit_reason": "roi_step_15m",
-                "open_date": "2026-10-20T06:00:00Z",
-                "close_date": "2026-10-20T09:30:00Z",
-            },
-        ]
-        self._recalculate_open_trades()
+        self.open_trades = []
+        self.closed_trades = []
 
     def _recalculate_open_trades(self) -> None:
         for t in self.open_trades:
@@ -1461,6 +1304,45 @@ async def get_master_consolidated(authorization: Optional[str] = Header(None)):
     require_admin(authorization)
     multi_account_pool.recalculate_all_accounts(orchestrator.market.live_prices)
     return multi_account_pool.get_consolidated_master_summary()
+
+
+class ResetAccountPayload(BaseModel):
+    account_id: Optional[str] = None
+    new_balance: Optional[float] = 10000.0
+    reset_all: Optional[bool] = False
+
+
+@app.post("/api/v1/accounts/reset")
+async def reset_account_endpoint(payload: ResetAccountPayload = Body(...), authorization: Optional[str] = Header(None)):
+    """Restablece la cuenta o todas las cuentas a estado limpio de fábrica (0 trades, balance restaurado, estado PAUSED)."""
+    user = get_current_user_optional(authorization)
+    if user and user.get("role") == "viewer":
+        raise HTTPException(status_code=403, detail="Los usuarios con rol Viewer no pueden reiniciar cuentas.")
+
+    if payload.reset_all:
+        multi_account_pool.reset_all_accounts()
+        orchestrator.open_trades = []
+        orchestrator.closed_trades = []
+        orchestrator.realized_pnl = 0.0
+        orchestrator.state = "PAUSED"
+        return {
+            "status": "ok",
+            "message": "Todas las cuentas han sido restablecidas a estado limpio de fábrica.",
+            "accounts": multi_account_pool.list_accounts_summary(),
+        }
+
+    target_id = payload.account_id or multi_account_pool.active_account_id
+    acc = multi_account_pool.reset_account(target_id, new_balance=payload.new_balance or 10000.0)
+    orchestrator.open_trades = []
+    orchestrator.closed_trades = []
+    orchestrator.realized_pnl = 0.0
+    orchestrator.state = "PAUSED"
+    return {
+        "status": "ok",
+        "message": f"Cuenta '{acc.name}' restablecida a estado limpio de fábrica.",
+        "account": acc.to_dict(),
+        "accounts": multi_account_pool.list_accounts_summary(),
+    }
 
 
 # ---------------------------------------------------------------------------

@@ -106,6 +106,20 @@ class AccountInstance:
             except Exception as e:
                 logger.warning(f"Error cargando portfolio de cuenta {self.account_id}: {e}")
 
+    def reset(self, new_balance: Optional[float] = None, state: str = "PAUSED") -> None:
+        """Restablece la cuenta a estado de fábrica 100% limpio (sin trades ni PnL residual)."""
+        bal = float(new_balance) if new_balance is not None else float(self.starting_balance)
+        self.starting_balance = bal
+        self.total_equity = bal
+        self.free_balance = bal
+        self.used_margin = 0.0
+        self.realized_pnl = 0.0
+        self.unrealized_pnl = 0.0
+        self.open_trades = []
+        self.closed_trades = []
+        self.state = state
+        self.save_to_disk()
+
     def save_to_disk(self):
         """Guarda el estado completo de forma persistente en su directorio exclusivo."""
         try:
@@ -362,7 +376,7 @@ class MultiAccountPool:
         subdirs = [d for d in ACCOUNTS_DIR.iterdir() if d.is_dir()]
 
         if not subdirs:
-            # Sembrar cuentas institucionales predeterminadas
+            # Sembrar cuentas institucionales predeterminadas (100% limpias, sin trades residuales)
             default_accounts = [
                 {
                     "account_id": "acc_dryrun_master",
@@ -374,14 +388,15 @@ class MultiAccountPool:
                     "active_strategy": "RocketMultiFactorV1",
                     "timeframe": "5m",
                     "starting_balance": 10000.0,
-                    "total_equity": 10418.65,
-                    "free_balance": 8968.65,
-                    "used_margin": 1450.0,
-                    "realized_pnl": 418.65,
+                    "total_equity": 10000.0,
+                    "free_balance": 10000.0,
+                    "used_margin": 0.0,
+                    "realized_pnl": 0.0,
                     "unrealized_pnl": 0.0,
                     "leverage": 3.0,
                     "max_open_trades": 5,
                     "stake_amount": 250.0,
+                    "state": "PAUSED",
                 },
                 {
                     "account_id": "acc_ftmo_propfirm",
@@ -393,14 +408,15 @@ class MultiAccountPool:
                     "active_strategy": "CommodityTrendBreakoutV1",
                     "timeframe": "15m",
                     "starting_balance": 100000.0,
-                    "total_equity": 103240.0,
-                    "free_balance": 97240.0,
-                    "used_margin": 6000.0,
-                    "realized_pnl": 3240.0,
+                    "total_equity": 100000.0,
+                    "free_balance": 100000.0,
+                    "used_margin": 0.0,
+                    "realized_pnl": 0.0,
                     "unrealized_pnl": 0.0,
                     "leverage": 2.0,
                     "max_open_trades": 4,
                     "stake_amount": 2000.0,
+                    "state": "PAUSED",
                     "prop_firm_rules": {
                         "max_daily_loss_pct": 5.0,
                         "max_total_loss_pct": 10.0,
@@ -417,14 +433,15 @@ class MultiAccountPool:
                     "active_strategy": "ForexMeanReversionV1",
                     "timeframe": "5m",
                     "starting_balance": 5000.0,
-                    "total_equity": 5320.0,
-                    "free_balance": 4820.0,
-                    "used_margin": 500.0,
-                    "realized_pnl": 320.0,
+                    "total_equity": 5000.0,
+                    "free_balance": 5000.0,
+                    "used_margin": 0.0,
+                    "realized_pnl": 0.0,
                     "unrealized_pnl": 0.0,
                     "leverage": 3.0,
                     "max_open_trades": 3,
                     "stake_amount": 250.0,
+                    "state": "PAUSED",
                 },
                 {
                     "account_id": "acc_spx_indices",
@@ -436,14 +453,15 @@ class MultiAccountPool:
                     "active_strategy": "IndexMomentumV1",
                     "timeframe": "15m",
                     "starting_balance": 50000.0,
-                    "total_equity": 52450.0,
-                    "free_balance": 48950.0,
-                    "used_margin": 3500.0,
-                    "realized_pnl": 2450.0,
+                    "total_equity": 50000.0,
+                    "free_balance": 50000.0,
+                    "used_margin": 0.0,
+                    "realized_pnl": 0.0,
                     "unrealized_pnl": 0.0,
                     "leverage": 2.0,
                     "max_open_trades": 4,
                     "stake_amount": 1500.0,
+                    "state": "PAUSED",
                 },
             ]
 
@@ -451,224 +469,6 @@ class MultiAccountPool:
                 acc_inst = AccountInstance(acc_cfg)
                 self.accounts[acc_inst.account_id] = acc_inst
                 acc_inst.save_to_disk()
-
-            # Sembrar trades iniciales en la cuenta master
-            master = self.accounts["acc_dryrun_master"]
-            if not master.open_trades:
-                master.open_trades = [
-                    {
-                        "trade_id": 1,
-                        "account_id": "acc_dryrun_master",
-                        "pair": "BTC/USDT",
-                        "side": "long",
-                        "open_rate": 67840.5,
-                        "current_rate": 68420.0,
-                        "stake_amount": 400.0,
-                        "leverage": 3.0,
-                        "position_Value": 1200.0,
-                        "stoploss_rate": 65466.0,
-                        "stoploss_price": 65466.0,
-                        "take_profit_rate": 72249.0,
-                        "take_profit_price": 72249.0,
-                        "liquidation_rate": 47488.35,
-                        "liquidation_distance_pct": 30.6,
-                        "dca_next_rate": 66822.89,
-                        "dca_target_price": 66822.89,
-                        "dca_count": 0,
-                        "max_dca": 2,
-                        "profit_pct": 2.56,
-                        "profit_abs": 10.25,
-                        "enter_tag": "MultiFactor_Pullback_EMA21",
-                        "strategy": "RocketMultiFactorV1",
-                        "open_date": datetime.now(timezone.utc).isoformat(),
-                    },
-                    {
-                        "trade_id": 2,
-                        "account_id": "acc_dryrun_master",
-                        "pair": "XAU/USD",
-                        "side": "long",
-                        "open_rate": 2724.8,
-                        "current_rate": 2738.5,
-                        "stake_amount": 500.0,
-                        "leverage": 2.0,
-                        "position_Value": 1000.0,
-                        "stoploss_rate": 2677.1,
-                        "stoploss_price": 2677.1,
-                        "take_profit_rate": 2813.35,
-                        "take_profit_price": 2813.35,
-                        "liquidation_rate": 1498.64,
-                        "liquidation_distance_pct": 45.3,
-                        "dca_next_rate": 2683.93,
-                        "dca_target_price": 2683.93,
-                        "dca_count": 0,
-                        "max_dca": 2,
-                        "profit_pct": 1.01,
-                        "profit_abs": 5.03,
-                        "enter_tag": "Donchian_Breakout_20High",
-                        "strategy": "CommodityTrendBreakoutV1",
-                        "open_date": datetime.now(timezone.utc).isoformat(),
-                    },
-                    {
-                        "trade_id": 3,
-                        "account_id": "acc_dryrun_master",
-                        "pair": "EUR/USD",
-                        "side": "long",
-                        "open_rate": 1.0835,
-                        "current_rate": 1.0858,
-                        "stake_amount": 550.0,
-                        "leverage": 3.0,
-                        "position_Value": 1650.0,
-                        "stoploss_rate": 1.0709,
-                        "stoploss_price": 1.0709,
-                        "take_profit_rate": 1.107,
-                        "take_profit_price": 1.107,
-                        "liquidation_rate": 0.7584,
-                        "liquidation_distance_pct": 30.1,
-                        "dca_next_rate": 1.0672,
-                        "dca_target_price": 1.0672,
-                        "dca_count": 0,
-                        "max_dca": 2,
-                        "profit_pct": 0.64,
-                        "profit_abs": 3.5,
-                        "enter_tag": "Bollinger_Mean_Reversion",
-                        "strategy": "ForexMeanReversionV1",
-                        "open_date": datetime.now(timezone.utc).isoformat(),
-                    },
-                ]
-                master.closed_trades = [
-                    {
-                        "trade_id": 101,
-                        "account_id": "acc_dryrun_master",
-                        "pair": "WTI/USD",
-                        "side": "long",
-                        "open_rate": 71.2,
-                        "close_rate": 73.8,
-                        "stake_amount": 350.0,
-                        "leverage": 2.0,
-                        "profit_abs": 25.56,
-                        "profit_pct": 7.3,
-                        "enter_tag": "Donchian_Breakout",
-                        "exit_reason": "take_profit_target",
-                        "strategy": "CommodityTrendBreakoutV1",
-                        "close_date": datetime.now(timezone.utc).isoformat(),
-                    },
-                    {
-                        "trade_id": 102,
-                        "account_id": "acc_dryrun_master",
-                        "pair": "BTC/USDT",
-                        "side": "long",
-                        "open_rate": 66200.0,
-                        "close_rate": 67900.0,
-                        "stake_amount": 400.0,
-                        "leverage": 3.0,
-                        "profit_abs": 30.82,
-                        "profit_pct": 7.7,
-                        "enter_tag": "MultiFactor_Pullback",
-                        "exit_reason": "trailing_stop_positive",
-                        "strategy": "RocketMultiFactorV1",
-                        "close_date": datetime.now(timezone.utc).isoformat(),
-                    },
-                ]
-                master.save_to_disk()
-
-            # Sembrar trades en cuenta FTMO
-            ftmo = self.accounts.get("acc_ftmo_propfirm")
-            if ftmo and not ftmo.open_trades:
-                ftmo.open_trades = [
-                    {
-                        "trade_id": 1,
-                        "account_id": "acc_ftmo_propfirm",
-                        "pair": "XAU/USD",
-                        "side": "long",
-                        "open_rate": 2718.5,
-                        "current_rate": 2738.5,
-                        "stake_amount": 3000.0,
-                        "leverage": 2.0,
-                        "position_Value": 6000.0,
-                        "stoploss_rate": 2675.0,
-                        "stoploss_price": 2675.0,
-                        "take_profit_rate": 2820.0,
-                        "take_profit_price": 2820.0,
-                        "liquidation_rate": 1490.0,
-                        "liquidation_distance_pct": 45.0,
-                        "dca_next_rate": 2685.0,
-                        "dca_target_price": 2685.0,
-                        "dca_count": 0,
-                        "max_dca": 2,
-                        "profit_pct": 1.47,
-                        "profit_abs": 44.1,
-                        "enter_tag": "FTMO_Gold_Breakout_H1",
-                        "strategy": "CommodityTrendBreakoutV1",
-                        "open_date": datetime.now(timezone.utc).isoformat(),
-                    }
-                ]
-                ftmo.save_to_disk()
-
-            # Sembrar trades en Bybit Scalping
-            bybit = self.accounts.get("acc_bybit_scalping")
-            if bybit and not bybit.open_trades:
-                bybit.open_trades = [
-                    {
-                        "trade_id": 1,
-                        "account_id": "acc_bybit_scalping",
-                        "pair": "SOL/USDT",
-                        "side": "long",
-                        "open_rate": 168.2,
-                        "current_rate": 172.4,
-                        "stake_amount": 250.0,
-                        "leverage": 3.0,
-                        "position_Value": 750.0,
-                        "stoploss_rate": 162.0,
-                        "stoploss_price": 162.0,
-                        "take_profit_rate": 182.0,
-                        "take_profit_price": 182.0,
-                        "liquidation_rate": 118.0,
-                        "liquidation_distance_pct": 31.5,
-                        "dca_next_rate": 164.0,
-                        "dca_target_price": 164.0,
-                        "dca_count": 0,
-                        "max_dca": 2,
-                        "profit_pct": 2.5,
-                        "profit_abs": 6.25,
-                        "enter_tag": "Bybit_MicroScalp_Pullback",
-                        "strategy": "ForexMeanReversionV1",
-                        "open_date": datetime.now(timezone.utc).isoformat(),
-                    }
-                ]
-                bybit.save_to_disk()
-
-            # Sembrar trades en SPX Índices
-            spx = self.accounts.get("acc_spx_indices")
-            if spx and not spx.open_trades:
-                spx.open_trades = [
-                    {
-                        "trade_id": 1,
-                        "account_id": "acc_spx_indices",
-                        "pair": "SPX500/USD",
-                        "side": "long",
-                        "open_rate": 5820.0,
-                        "current_rate": 5854.0,
-                        "stake_amount": 2000.0,
-                        "leverage": 2.0,
-                        "position_Value": 4000.0,
-                        "stoploss_rate": 5720.0,
-                        "stoploss_price": 5720.0,
-                        "take_profit_rate": 6010.0,
-                        "take_profit_price": 6010.0,
-                        "liquidation_rate": 3200.0,
-                        "liquidation_distance_pct": 45.3,
-                        "dca_next_rate": 5760.0,
-                        "dca_target_price": 5760.0,
-                        "dca_count": 0,
-                        "max_dca": 2,
-                        "profit_pct": 1.17,
-                        "profit_abs": 23.4,
-                        "enter_tag": "Institutional_Index_Trend",
-                        "strategy": "IndexMomentumV1",
-                        "open_date": datetime.now(timezone.utc).isoformat(),
-                    }
-                ]
-                spx.save_to_disk()
         else:
             # Cargar cuentas existentes en disco
             for dir_path in subdirs:
@@ -802,6 +602,19 @@ class MultiAccountPool:
         """Actualiza todas las cuentas en memoria concurrentemente con los precios de mercado en vivo."""
         for acc in self.accounts.values():
             acc.recalculate_open_trades(current_prices)
+
+    def reset_account(self, account_id: str, new_balance: Optional[float] = None) -> AccountInstance:
+        """Restablece una subcuenta a estado limpio de fábrica (0 trades, balance inicial, PAUSED)."""
+        acc = self.get_account(account_id)
+        if not acc:
+            raise ValueError(f"Cuenta {account_id} no encontrada.")
+        acc.reset(new_balance=new_balance)
+        return acc
+
+    def reset_all_accounts(self) -> None:
+        """Limpia y resetea todas las cuentas al estado de fábrica sin operaciones previas."""
+        for acc in self.accounts.values():
+            acc.reset(new_balance=acc.starting_balance)
 
 
 # Instancia singleton del administrador multicuenta

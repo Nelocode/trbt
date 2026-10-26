@@ -1,9 +1,9 @@
 {
-  "total_equity": 103240.0,
-  "free_balance": 97240.0,
-  "used_margin": 6000.0,
-  "realized_pnl": 3240.0,
+  "total_equity": 100000.0,
+  "free_balance": 100000.0,
+  "used_margin": 0.0,
+  "realized_pnl": 0.0,
   "unrealized_pnl": 0.0,
-  "state": "RUNNING",
-  "last_updated": "2026-10-24T06:30:38.070341+00:00"
+  "state": "PAUSED",
+  "last_updated": "2026-10-26T00:00:00Z"
 }
