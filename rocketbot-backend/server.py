@@ -1288,6 +1288,7 @@ class ResetAccountPayload(BaseModel):
     reset_all: Optional[bool] = False
 
 
+@app.post("/api/v1/system/factory-reset")
 @app.post("/api/v1/accounts/reset")
 async def reset_account_endpoint(payload: ResetAccountPayload = Body(...), authorization: Optional[str] = Header(None)):
     """Restablece la cuenta o todas las cuentas a estado limpio de fábrica (0 trades, balance restaurado, estado PAUSED)."""

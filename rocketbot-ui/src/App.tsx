@@ -562,7 +562,7 @@ export default function App() {
       return;
     }
     try {
-      const res = await fetch(`${API_BASE}/api/v1/accounts/reset`, {
+      const res = await fetch(`${API_BASE}/api/v1/system/factory-reset`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
