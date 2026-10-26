@@ -843,6 +843,7 @@ export default function App() {
             onOpenAICopilot={() => setIsAIOpen(true)}
             onSwitchToPro={() => handleSetExperienceMode('pro')}
             onOpenAchievements={() => setIsAchievementsOpen(true)}
+            onQuickOrder={handleQuickOrder}
             accountName={portfolio?.name || portfolio?.account_name || activeAccountId}
             selectedPair={selectedPair}
             setSelectedPair={setSelectedPair}

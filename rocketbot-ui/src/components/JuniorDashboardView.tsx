@@ -58,6 +58,7 @@ interface JuniorDashboardViewProps {
   onOpenAICopilot: () => void;
   onSwitchToPro: () => void;
   onOpenAchievements?: () => void;
+  onQuickOrder?: (pair: string, side: 'long' | 'short') => Promise<void>;
   accountName?: string;
   selectedPair?: string;
   setSelectedPair?: (pair: string) => void;
@@ -80,6 +81,7 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
   onOpenAICopilot,
   onSwitchToPro,
   onOpenAchievements,
+  onQuickOrder,
   accountName = 'Mi Cuenta de Trading',
   selectedPair = 'BTC/USDT',
   setSelectedPair,
@@ -922,18 +924,54 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
         </div>
 
         {openTrades.length === 0 ? (
-          <div className="p-8 figma-card rounded-2xl border border-white/[0.08] text-center space-y-3">
+          <div className="p-6 sm:p-8 figma-card rounded-2xl border border-white/[0.08] text-center space-y-4">
             <div className="w-12 h-12 rounded-2xl bg-white/[0.05] border border-white/[0.08] flex items-center justify-center text-[#8E95A2] mx-auto">
-              <Clock className="w-6 h-6" />
+              <Clock className="w-6 h-6 text-[#00DFDF]" />
             </div>
-            <div className="max-w-md mx-auto space-y-1">
+            <div className="max-w-md mx-auto space-y-1.5">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#00DFDF]/10 border border-[#00DFDF]/30 text-[#00DFDF] text-[11px] font-bold">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Modo Centinela Activo • Escaneando Mercado</span>
+              </div>
               <h3 className="text-sm font-bold font-heading text-white">
                 No hay operaciones abiertas en este momento
               </h3>
               <p className="text-xs text-[#8E95A2] leading-relaxed">
-                El bot analiza con paciencia. No fuerza órdenes sin ventaja matemática, protegiendo tu dinero de falsos movimientos.
+                El bot analiza con paciencia matemática segundo a segundo. No abre órdenes al azar para proteger tu capital y solo entrará cuando se alineen las 5 condiciones del radar institucional.
               </p>
             </div>
+
+            {/* Acciones para principiante: lanzar trade de práctica inmediato */}
+            {onQuickOrder && (
+              <div className="pt-2 max-w-lg mx-auto border-t border-white/[0.08]">
+                <p className="text-[11px] text-slate-300 font-medium mb-2.5">
+                  ¿Quieres ver cómo funciona una operación en vivo ahora mismo?
+                </p>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      audioFeedback.playClickTick();
+                      onQuickOrder('BTC/USDT', 'long');
+                    }}
+                    className="h-8 px-3 rounded-xl bg-[#00DFDF]/15 hover:bg-[#00DFDF]/25 border border-[#00DFDF]/35 text-[#00DFDF] text-xs font-heading font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+                  >
+                    <span>🚀 Abrir Práctica en Bitcoin (BTC)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      audioFeedback.playClickTick();
+                      onQuickOrder('XAU/USD', 'long');
+                    }}
+                    className="h-8 px-3 rounded-xl bg-[#FFB800]/15 hover:bg-[#FFB800]/25 border border-[#FFB800]/35 text-[#FFB800] text-xs font-heading font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+                  >
+                    <span>🥇 Abrir Práctica en Oro (XAU)</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
