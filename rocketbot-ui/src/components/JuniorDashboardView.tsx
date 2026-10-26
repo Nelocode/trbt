@@ -36,6 +36,7 @@ import {
   Trophy,
   Rocket,
   RotateCcw,
+  Lock,
 } from 'lucide-react';
 import {
   TradingViewChart,
@@ -62,6 +63,7 @@ interface JuniorDashboardViewProps {
   onOpenAchievements?: () => void;
   onQuickOrder?: (pair: string, side: 'long' | 'short') => Promise<void>;
   onOpenEngineWizard?: () => void;
+  onOpenConnectExchange?: () => void;
   onFactoryReset?: () => void;
   accountName?: string;
   selectedPair?: string;
@@ -87,6 +89,7 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
   onOpenAchievements,
   onQuickOrder,
   onOpenEngineWizard,
+  onOpenConnectExchange,
   onFactoryReset,
   accountName = 'Mi Cuenta de Trading',
   selectedPair = 'BTC/USDT',
@@ -404,6 +407,30 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
               <span className="sm:hidden">Motores</span>
             </button>
           )}
+
+          {/* Botón Conectar Exchange de Criptomonedas */}
+          {onOpenConnectExchange && (
+            <button
+              type="button"
+              onClick={() => {
+                audioFeedback.playClickTick();
+                onOpenConnectExchange();
+              }}
+              className={`h-8 px-2.5 sm:px-3 rounded-xl border flex items-center gap-1.5 transition cursor-pointer font-heading font-bold text-xs ${
+                portfolio?.exchange_connected
+                  ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.2)]'
+                  : 'bg-cyan-500/15 hover:bg-cyan-500/25 border-cyan-500/35 text-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.15)]'
+              }`}
+              title="Conectar Exchange No-Custodial (Binance, Bybit, OKX)"
+            >
+              <Lock className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden sm:inline">
+                {portfolio?.exchange_connected ? `${portfolio?.exchange?.toUpperCase()} Conectado` : 'Conectar Exchange'}
+              </span>
+              <span className="sm:hidden">{portfolio?.exchange_connected ? 'Exchange' : 'Exchange'}</span>
+            </button>
+          )}
+
 
           {/* Botón Sala de Trofeos (200 Logros) */}
           <button
@@ -1023,6 +1050,22 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
                       <span>⚙️ Puesta a Punto & Arrancar Motores</span>
                     </button>
                   )}
+
+                  {/* Vincular Claves de Exchange */}
+                  {onOpenConnectExchange && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        audioFeedback.playClickTick();
+                        onOpenConnectExchange();
+                      }}
+                      className="h-8 px-3 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/35 text-cyan-300 text-xs font-heading font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+                    >
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>🔌 Conectar Exchange (No-Custodial)</span>
+                    </button>
+                  )}
+
                 </div>
               </div>
             )}

@@ -55,6 +55,7 @@ from quant_risk_engine import (
 )
 from multi_account_manager import multi_account_pool
 from auth_manager import auth_manager, create_jwt_token, verify_jwt_token
+from exchange_vault import vault_manager, SERVER_PUBLIC_IP
 
 circuit_breaker = CircuitBreakerEngine(max_daily_loss_pct=4.0, max_consecutive_losses=3)
 
@@ -1344,6 +1345,160 @@ async def delete_account_endpoint(account_id: str):
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Endpoints de Conexión Segura de API Keys de Exchanges (Fase 1 Comercial)
+# ---------------------------------------------------------------------------
+class TestExchangeConnectionPayload(BaseModel):
+    exchange: str
+    api_key: str
+    api_secret: str
+    passphrase: Optional[str] = None
+    is_testnet: Optional[bool] = False
+    trading_mode: Optional[str] = "spot"
+
+
+class SaveExchangeKeysPayload(BaseModel):
+    account_id: Optional[str] = None
+    exchange: str
+    api_key: str
+    api_secret: str
+    passphrase: Optional[str] = None
+    is_testnet: Optional[bool] = False
+    trading_mode: Optional[str] = "spot"
+
+
+@app.post("/api/v1/exchange/test-connection")
+async def test_exchange_connection_endpoint(
+    payload: TestExchangeConnectionPayload = Body(...),
+    authorization: Optional[str] = Header(None),
+):
+    """Prueba en vivo la conectividad con el Exchange vía CCXT y realiza la auditoría de seguridad bancaria."""
+    try:
+        audit_res = await vault_manager.test_connection(
+            exchange_id=payload.exchange,
+            api_key=payload.api_key,
+            api_secret=payload.api_secret,
+            passphrase=payload.passphrase,
+            is_testnet=payload.is_testnet or False,
+            trading_mode=payload.trading_mode or "spot",
+        )
+        return audit_res
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error inesperado en test_exchange_connection: {e}")
+        raise HTTPException(status_code=500, detail=f"Fallo de conexión con {payload.exchange}: {str(e)}")
+
+
+@app.post("/api/v1/exchange/save-keys")
+async def save_exchange_keys_endpoint(
+    payload: SaveExchangeKeysPayload = Body(...),
+    authorization: Optional[str] = Header(None),
+):
+    """Valida, cifra con AES-256-GCM y vincula permanentemente las API Keys a la subcuenta especificada."""
+    user = get_current_user_optional(authorization)
+    target_id = payload.account_id or multi_account_pool.active_account_id
+
+    if user and not auth_manager.can_access_account(user, target_id):
+        raise HTTPException(status_code=403, detail="No tienes autorización para vincular claves a esta subcuenta.")
+
+    acc = multi_account_pool.get_account(target_id)
+    if not acc:
+        raise HTTPException(status_code=404, detail="Subcuenta no encontrada.")
+
+    # 1. Probar en vivo primero para certificar que funcionan antes de guardar
+    try:
+        audit_res = await vault_manager.test_connection(
+            exchange_id=payload.exchange,
+            api_key=payload.api_key,
+            api_secret=payload.api_secret,
+            passphrase=payload.passphrase,
+            is_testnet=payload.is_testnet or False,
+            trading_mode=payload.trading_mode or "spot",
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"No se pudieron validar las credenciales: {str(e)}")
+
+    # 2. Guardar cifrado en disco en la carpeta individual de la subcuenta
+    saved_info = acc.save_credentials(
+        exchange=payload.exchange,
+        api_key=payload.api_key,
+        api_secret=payload.api_secret,
+        passphrase=payload.passphrase,
+        is_testnet=payload.is_testnet or False,
+        trading_mode=payload.trading_mode or "spot",
+        audit_result=audit_res,
+    )
+
+    # 3. Si el exchange reporta balance en USDT positivo, sincronizar con el equity de la cuenta
+    usdt_total = audit_res.get("usdt_total", 0.0)
+    if usdt_total > 0:
+        acc.total_equity = round(usdt_total, 2)
+        acc.free_balance = round(audit_res.get("usdt_free", usdt_total), 2)
+        acc.starting_balance = round(usdt_total, 2)
+        acc.save_to_disk()
+
+    return {
+        "status": "saved",
+        "message": f"Claves de {payload.exchange.upper()} cifradas y vinculadas exitosamente con protección bancaria.",
+        "account_id": acc.account_id,
+        "credentials": saved_info,
+        "audit": audit_res,
+        "server_ip": SERVER_PUBLIC_IP,
+    }
+
+
+@app.get("/api/v1/exchange/status")
+async def get_exchange_status_endpoint(
+    account_id: Optional[str] = None,
+    authorization: Optional[str] = Header(None),
+):
+    """Devuelve el estado de vinculación con el exchange para la subcuenta activa sin revelar secretos."""
+    user = get_current_user_optional(authorization)
+    target_id = account_id or multi_account_pool.active_account_id
+
+    if user and not auth_manager.can_access_account(user, target_id):
+        raise HTTPException(status_code=403, detail="No tienes autorización para consultar esta subcuenta.")
+
+    acc = multi_account_pool.get_account(target_id)
+    if not acc:
+        raise HTTPException(status_code=404, detail="Subcuenta no encontrada.")
+
+    cred_info = acc.get_credentials_info()
+    return {
+        "account_id": acc.account_id,
+        "account_name": acc.name,
+        "connected": bool(cred_info is not None),
+        "credentials": cred_info,
+        "server_ip": SERVER_PUBLIC_IP,
+    }
+
+
+@app.delete("/api/v1/exchange/disconnect")
+async def disconnect_exchange_endpoint(
+    account_id: Optional[str] = None,
+    authorization: Optional[str] = Header(None),
+):
+    """Elimina las credenciales cifradas del exchange de la subcuenta y revierte a modo simulación (Dry-Run)."""
+    user = get_current_user_optional(authorization)
+    target_id = account_id or multi_account_pool.active_account_id
+
+    if user and not auth_manager.can_access_account(user, target_id):
+        raise HTTPException(status_code=403, detail="No tienes autorización para desvincular esta subcuenta.")
+
+    acc = multi_account_pool.get_account(target_id)
+    if not acc:
+        raise HTTPException(status_code=404, detail="Subcuenta no encontrada.")
+
+    acc.delete_credentials()
+    return {
+        "status": "disconnected",
+        "message": f"Exchange desvinculado de la subcuenta '{acc.name}'. Se ha activado el modo de simulación.",
+        "account_id": acc.account_id,
+    }
+
 
 
 # ---------------------------------------------------------------------------

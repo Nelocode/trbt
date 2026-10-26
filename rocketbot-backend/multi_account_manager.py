@@ -213,6 +213,7 @@ class AccountInstance:
         total_pnl = round(self.realized_pnl + self.unrealized_pnl, 2)
         total_pnl_pct = round(((self.total_equity - self.starting_balance) / self.starting_balance) * 100, 2)
 
+        cred_info = self.get_credentials_info()
         return {
             "account_id": self.account_id,
             "name": self.name,
@@ -238,7 +239,100 @@ class AccountInstance:
             "stake_amount": self.stake_amount,
             "prop_firm_rules": self.prop_firm_rules,
             "created_at": self.created_at,
+            "exchange_connected": bool(cred_info is not None),
+            "exchange_credentials": cred_info,
         }
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Alias para compatibilidad completa con endpoints API."""
+        return self.get_summary()
+
+    def get_credentials_info(self) -> Optional[Dict[str, Any]]:
+        """Devuelve el estado de credenciales de exchange vinculadas sin exponer secretos."""
+        cred_file = self._account_dir / "credentials.json"
+        if not cred_file.exists():
+            return None
+        try:
+            data = json.loads(cred_file.read_text(encoding="utf-8"))
+            return {
+                "exchange": data.get("exchange", self.exchange),
+                "api_key_masked": data.get("api_key_masked", "••••••••"),
+                "is_testnet": data.get("is_testnet", False),
+                "trading_mode": data.get("trading_mode", self.trading_mode),
+                "connected_at": data.get("connected_at"),
+                "last_verified_at": data.get("last_verified_at"),
+                "balances": data.get("balances", {}),
+                "permissions": data.get("permissions", {}),
+                "status": "connected",
+            }
+        except Exception as e:
+            logger.error(f"Error leyendo credentials de {self.account_id}: {e}")
+            return None
+
+    def save_credentials(
+        self,
+        exchange: str,
+        api_key: str,
+        api_secret: str,
+        passphrase: Optional[str] = None,
+        is_testnet: bool = False,
+        trading_mode: str = "spot",
+        audit_result: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Cifra con AES-256-GCM y almacena las credenciales de exchange de forma aislada."""
+        from exchange_vault import vault_manager
+
+        enc_key = vault_manager.encrypt(api_key.strip())
+        enc_secret = vault_manager.encrypt(api_secret.strip())
+        enc_passphrase = vault_manager.encrypt(passphrase.strip()) if passphrase else None
+
+        masked_key = vault_manager.mask_key(api_key.strip())
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        cred_payload = {
+            "account_id": self.account_id,
+            "exchange": exchange.lower().strip(),
+            "api_key_masked": masked_key,
+            "enc_key": enc_key,
+            "enc_secret": enc_secret,
+            "enc_passphrase": enc_passphrase,
+            "is_testnet": is_testnet,
+            "trading_mode": trading_mode,
+            "connected_at": now_iso,
+            "last_verified_at": now_iso,
+            "balances": audit_result.get("balances", {}) if audit_result else {},
+            "permissions": audit_result.get("permissions", {}) if audit_result else {},
+        }
+
+        cred_file = self._account_dir / "credentials.json"
+        cred_file.write_text(json.dumps(cred_payload, indent=2), encoding="utf-8")
+        try:
+            os.chmod(cred_file, 0o600)
+        except Exception:
+            pass
+
+        self.exchange = exchange.lower().strip()
+        self.trading_mode = trading_mode
+        self.dry_run = False
+        self.save_to_disk()
+
+        return self.get_credentials_info() or {
+            "exchange": self.exchange,
+            "api_key_masked": masked_key,
+            "is_testnet": is_testnet,
+            "status": "connected",
+        }
+
+    def delete_credentials(self) -> None:
+        """Elimina de forma segura las credenciales y revierte la cuenta a modo dry_run."""
+        cred_file = self._account_dir / "credentials.json"
+        if cred_file.exists():
+            try:
+                cred_file.unlink()
+            except Exception as e:
+                logger.error(f"Error borrando credentials.json de {self.account_id}: {e}")
+        self.dry_run = True
+        self.save_to_disk()
 
     def force_enter_trade(
         self,

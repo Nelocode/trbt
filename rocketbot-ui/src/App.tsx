@@ -29,6 +29,7 @@ import {
   Minus,
   Menu,
   X,
+  Lock,
 } from 'lucide-react';
 import { JuniorDashboardView } from './components/JuniorDashboardView';
 import {
@@ -58,6 +59,7 @@ import { ConfirmLiveCapitalModal } from './components/ConfirmLiveCapitalModal';
 import { AchievementToast } from './components/AchievementToast';
 import { AchievementsModal } from './components/AchievementsModal';
 import { EngineStartWizardModal } from './components/EngineStartWizardModal';
+import { ConnectExchangeModal } from './components/ConnectExchangeModal';
 import { achievementsService } from './utils/achievementsService';
 
 // Auto-detección dinámica para producción en Docker, Easypanel o desarrollo local
@@ -101,6 +103,7 @@ export default function App() {
   });
   const [isNewAccountModalOpen, setIsNewAccountModalOpen] = useState<boolean>(false);
   const [isMasterModalOpen, setIsMasterModalOpen] = useState<boolean>(false);
+  const [isConnectExchangeModalOpen, setIsConnectExchangeModalOpen] = useState<boolean>(false);
 
   // Autenticación JWT y Roles RBAC
   const [authToken, setAuthToken] = useState<string>(() => {
@@ -743,6 +746,24 @@ export default function App() {
               <span className="hidden lg:inline">Puesta a Punto</span>
             </button>
 
+            {/* Botón Conectar Exchange de Criptomonedas (Bóveda Criptográfica AES-256) */}
+            <button
+              onClick={() => setIsConnectExchangeModalOpen(true)}
+              className={`h-8 sm:h-9 px-2.5 sm:px-3 rounded-xl border flex items-center gap-1.5 transition cursor-pointer font-heading font-bold text-xs shrink-0 ${
+                portfolio?.exchange_connected
+                  ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.2)]'
+                  : 'bg-cyan-500/15 hover:bg-cyan-500/25 border-cyan-500/35 text-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.15)]'
+              }`}
+              title="Conectar Exchange No-Custodial (Binance, Bybit, OKX, BingX, Bitget)"
+            >
+              <Lock className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden xl:inline">
+                {portfolio?.exchange_connected ? `${portfolio?.exchange?.toUpperCase()} Conectado` : 'Conectar Exchange'}
+              </span>
+              <span className="xl:hidden">Exchange</span>
+            </button>
+
+
             {/* Botón Mentor IA (Uniforme h-8 sm:h-9) */}
             <button
               data-tour="ai-copilot-btn"
@@ -912,6 +933,7 @@ export default function App() {
             onOpenAchievements={() => setIsAchievementsOpen(true)}
             onQuickOrder={handleQuickOrder}
             onOpenEngineWizard={() => setIsEngineWizardOpen(true)}
+            onOpenConnectExchange={() => setIsConnectExchangeModalOpen(true)}
             onFactoryReset={handleFactoryReset}
             accountName={portfolio?.name || portfolio?.account_name || activeAccountId}
             selectedPair={selectedPair}
@@ -1616,6 +1638,20 @@ export default function App() {
         accountName={portfolio?.name || portfolio?.account_name || activeAccountId || 'Cuenta Activa'}
       />
 
+      {/* Modal de Conexión Segura de Exchange (Bóveda AES-256-GCM No-Custodial) */}
+      <ConnectExchangeModal
+        isOpen={isConnectExchangeModalOpen}
+        onClose={() => setIsConnectExchangeModalOpen(false)}
+        apiBase={API_BASE}
+        token={authToken}
+        accountId={activeAccountId}
+        accountName={portfolio?.name || portfolio?.account_name || activeAccountId}
+        currentCredentials={portfolio?.exchange_credentials}
+        onCredentialsUpdated={() => {
+          fetchOverview();
+        }}
+      />
+
       {/* Drawer / Menú Móvil Adaptativo */}
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
@@ -1742,6 +1778,27 @@ export default function App() {
                     SETUP
                   </span>
                 </button>
+
+                <button
+                  onClick={() => {
+                    setIsConnectExchangeModalOpen(true);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="col-span-2 h-10 rounded-xl bg-gradient-to-r from-cyan-500/20 to-blue-500/15 border border-cyan-500/40 text-cyan-300 text-xs font-heading font-bold flex items-center justify-between px-3 cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    <Lock className="w-4 h-4 text-cyan-400" />
+                    <span>
+                      {portfolio?.exchange_connected
+                        ? `${portfolio?.exchange?.toUpperCase()} Conectado`
+                        : 'Conectar Exchange (Bóveda AES-256)'}
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono bg-cyan-400/25 text-cyan-200 px-2 py-0.5 rounded">
+                    {portfolio?.exchange_connected ? 'CONECTADO' : 'NO-CUSTODIAL'}
+                  </span>
+                </button>
+
 
                 <button
                   onClick={() => {
