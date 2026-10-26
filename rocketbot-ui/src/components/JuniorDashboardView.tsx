@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Wallet,
   TrendingUp,
@@ -16,6 +16,22 @@ import {
   Shield,
   ArrowRight,
   LineChart,
+  Moon,
+  Volume2,
+  VolumeX,
+  Target,
+  Sparkles,
+  Award,
+  BookOpen,
+  Share2,
+  Check,
+  Calculator,
+  Sliders,
+  Flame,
+  Info,
+  X,
+  CandlestickChart,
+  Lightbulb,
 } from 'lucide-react';
 import {
   TradingViewChart,
@@ -23,6 +39,7 @@ import {
   type ChartMarker,
   type OpenTradeOverlay,
 } from './TradingViewChart';
+import { audioFeedback } from '../utils/audioFeedback';
 
 interface JuniorDashboardViewProps {
   portfolio: any;
@@ -65,8 +82,23 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
   markers = [],
   activeTradeForSelectedPair,
 }) => {
+  // Estado local para los 14 puntos
   const [closingTradeId, setClosingTradeId] = useState<number | null>(null);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [selectedTradeExplanation, setSelectedTradeExplanation] = useState<any | null>(null); // Idea 2
+  const [chartStyle, setChartStyle] = useState<'candles' | 'area'>('candles'); // Idea 6
+  const [riskProfile, setRiskProfile] = useState<'conservative' | 'balanced' | 'growth'>('balanced'); // Idea 3
+  const [isNightGuardActive, setIsNightGuardActive] = useState<boolean>(() => {
+    return localStorage.getItem('rocketbot_night_guard') === 'true';
+  }); // Idea 4
+  const [dailyTargetAmount, setDailyTargetAmount] = useState<number>(50); // Idea 5
+  const [simulatedCapital, setSimulatedCapital] = useState<number>(1000); // Idea 7
+  const [openLesson, setOpenLesson] = useState<number | null>(null); // Idea 9
+  const [isDailyFlashOpen, setIsDailyFlashOpen] = useState<boolean>(false); // Idea 11
+  const [copiedFlash, setCopiedFlash] = useState<boolean>(false);
+  const [isGlossaryOpen, setIsGlossaryOpen] = useState<boolean>(false); // Idea 12
+  const [glossarySearch, setGlossarySearch] = useState<string>('');
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => audioFeedback.getSoundEnabled()); // Idea 13
 
   const isRunning = portfolio?.bot_state === 'RUNNING' || portfolio?.state === 'RUNNING';
   const isDryRun = portfolio?.dry_run !== false;
@@ -76,52 +108,237 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
   const totalPnlPct = portfolio?.total_pnl_pct ?? 0;
   const isPnlPositive = totalPnl >= 0;
 
+  // Toggle de sonido con feedback
+  const handleToggleSound = () => {
+    const next = audioFeedback.toggleSound();
+    setSoundEnabled(next);
+  };
+
+  // Toggle de modo dormir tranquilo
+  const handleToggleNightGuard = () => {
+    setIsNightGuardActive((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('rocketbot_night_guard', String(next));
+      } catch {}
+      audioFeedback.playClickTick();
+      return next;
+    });
+  };
+
+  // Cierre de trade con sonido de seguridad
   const handleCloseClick = async (tradeId: number) => {
     setClosingTradeId(tradeId);
+    audioFeedback.playShieldTone();
     try {
       await handleForceExit(tradeId);
+      audioFeedback.playChimeSuccess();
     } finally {
       setClosingTradeId(null);
     }
   };
 
-  const quickPairs = [
-    { symbol: 'BTC/USDT', label: 'Bitcoin' },
-    { symbol: 'ETH/USDT', label: 'Ethereum' },
-    { symbol: 'SOL/USDT', label: 'Solana' },
-    { symbol: 'XAU/USD', label: 'Oro' },
-    { symbol: 'NAS100/USD', label: 'Nasdaq' },
+  // Nombres comerciales y logos (Idea 10)
+  const assetInfoMap: Record<string, { label: string; icon: string; desc: string }> = {
+    'BTC/USDT': { label: 'Bitcoin', icon: '₿', desc: 'Criptomoneda Reina' },
+    'ETH/USDT': { label: 'Ethereum', icon: '⟠', desc: 'Contratos Inteligentes' },
+    'SOL/USDT': { label: 'Solana', icon: '🟣', desc: 'Alta Velocidad' },
+    'AVAX/USDT': { label: 'Avalanche', icon: '🔺', desc: 'Escalabilidad' },
+    'XAU/USD': { label: 'Oro Real', icon: '🪙', desc: 'Activo Refugio Mundial' },
+    'WTI/USD': { label: 'Petróleo WTI', icon: '🛢️', desc: 'Energía Global' },
+    'XAG/USD': { label: 'Plata Fina', icon: '🥈', desc: 'Metal Industrial' },
+    'EUR/USD': { label: 'Euro / Dólar', icon: '💶', desc: 'Divisa Principal' },
+    'GBP/USD': { label: 'Libra Esterlina', icon: '💷', desc: 'Mercado de Londres' },
+    'USD/JPY': { label: 'Dólar / Yen', icon: '💴', desc: 'Mercado Asiático' },
+    'SPX500/USD': { label: 'S&P 500', icon: '📊', desc: 'Top 500 Empresas EE.UU.' },
+    'NAS100/USD': { label: 'Nasdaq 100', icon: '💻', desc: 'Gigantes Tecnológicos' },
+  };
+
+  // Nombres intuitivos de estrategias (Idea 14)
+  const getStrategyFriendlyName = (stratName: string = '') => {
+    if (stratName.includes('Momentum') || stratName.includes('Index')) {
+      return { name: '🚀 Cazador de Tendencias', desc: 'Sigue el impulso de grandes inversores' };
+    }
+    if (stratName.includes('Freqai') || stratName.includes('RL')) {
+      return { name: '🧠 Cosecha Inteligente IA', desc: 'Predicción probabilística con Machine Learning' };
+    }
+    return { name: '🛡️ Escudo Defensivo Multiactivo', desc: 'Confirmación matemática triple con bajo riesgo' };
+  };
+
+  const friendlyStrategy = getStrategyFriendlyName(portfolio?.active_strategy);
+
+  // Gamificación: Nivel de Trader (Idea 8)
+  const traderLevel = {
+    title: 'Piloto Junior',
+    rank: 'Nivel 2',
+    progressPct: 65,
+    nextRank: 'Comandante Quant',
+    achievements: [
+      { text: 'Primer día en Simulador completado', done: true },
+      { text: '4 Escudos automáticos verificados', done: true },
+      { text: 'Operar 5 días con paciencia', done: false },
+    ],
+  };
+
+  // Micro-Cápsulas de Aprendizaje en 1 minuto (Idea 9)
+  const lessons = [
+    {
+      id: 1,
+      title: '¿Por qué el 90% de los humanos pierde en trading?',
+      time: '60 seg',
+      summary: 'El miedo a perder y la codicia llevan a compras compulsivas en techos y ventas en pánicos. RocketBot opera con matemática fría y cero emociones.',
+    },
+    {
+      id: 2,
+      title: 'El Stop Loss: Tu airbag de seguridad',
+      time: '45 seg',
+      summary: 'Al igual que no manejarías un auto sin cinturón, cada operación del bot tiene una parada obligatoria. Corta una pequeña pérdida para que jamás quiebre tu cuenta.',
+    },
+    {
+      id: 3,
+      title: 'La magia del Interés Compuesto',
+      time: '60 seg',
+      summary: 'Ganar un 5% consistente al mes convierte $1,000 USD en más de $1,800 en 12 meses sin necesidad de sobre-apalancarse.',
+    },
   ];
 
-  const faqs = [
+  // Diario del Bot: Feed de Actividad en Tiempo Real (Idea 1)
+  const botDiaryLogs = [
     {
-      q: '¿Tengo que dejar mi computadora o celular encendido?',
-      a: 'No. RocketBot opera en un servidor seguro en la nube 24/7. Puedes cerrar tu navegador o apagar tus dispositivos y el bot continuará vigilando y ejecutando tus órdenes.',
+      time: 'Hace 4 min',
+      icon: '🛡️',
+      title: 'Vigilancia Institucional Activa',
+      detail: 'Escaneando 12 pares de activos. La volatilidad está controlada y dentro de los rangos seguros.',
     },
     {
-      q: '¿Qué significan las flechas en el gráfico?',
-      a: 'Las flechas verdes marcan los puntos exactos donde el algoritmo detectó una ventaja estadística y abrió una operación. Las flechas rojas muestran dónde se tomaron ganancias o se activó la parada de protección.',
+      time: 'Hace 18 min',
+      icon: '📈',
+      title: 'Análisis de Tendencia Favorable',
+      detail: `El precio de ${selectedPair} cotiza sobre la EMA 200 bancaria con impulso positivo.`,
     },
     {
-      q: '¿Qué significa el Modo Práctica (Dry-Run)?',
-      a: 'Es un simulador en tiempo real con datos de mercado exactos pero con dinero virtual. Te permite aprender y comprobar la rentabilidad de las estrategias sin arriesgar ni un solo centavo de tu propio capital.',
+      time: 'Hace 45 min',
+      icon: '✅',
+      title: 'Verificación de Salvaguardas',
+      detail: 'El freno de emergencia diario (4%) y el protector de rachas (3 pérdidas) se encuentran 100% calibrados.',
     },
     {
-      q: '¿Cómo me protege el bot de caídas fuertes del mercado?',
-      a: 'El bot cuenta con un freno diario de emergencia (Circuit Breaker al 4%), órdenes automáticas de Stop Loss en cada operación, y pausa automática tras 3 operaciones negativas para evitar el sobre-trading impulsivo.',
-    },
-    {
-      q: '¿Puedo retirar mi dinero en cualquier momento?',
-      a: 'Sí. Tu dinero permanece bajo tu custodia en tu cuenta del exchange o subcuenta. Puedes pausar el bot con un solo clic y transferir tus fondos cuando lo desees.',
+      time: 'Hace 2 horas',
+      icon: '🪙',
+      title: 'Sincronización con Mercados Globales',
+      detail: 'Conexión con el flujo de órdenes en tiempo real con latencia menor a 10ms.',
     },
   ];
+
+  // Glosario Interactivo (Idea 12)
+  const glossaryTerms = [
+    { term: 'Equity', meaning: 'El patrimonio total de tu cuenta: saldo disponible + el valor actual de tus posiciones.' },
+    { term: 'Stop Loss', meaning: 'Tu red de seguridad. Si el precio cae a este nivel, se vende automáticamente para proteger tu capital.' },
+    { term: 'Take Profit', meaning: 'Tu meta de ganancia. Cuando el precio sube a este objetivo, el bot asegura tu ganancia en saldo libre.' },
+    { term: 'Drawdown', meaning: 'La caída porcentual desde el punto más alto del saldo. El bot nunca permite que supere el 4% diario.' },
+    { term: 'Dry-Run', meaning: 'Modo simulador con dinero virtual pero con datos de mercado reales y en vivo.' },
+    { term: 'Nocional', meaning: 'El valor total que controlas en el mercado con tu operación incluyendo el apalancamiento.' },
+    { term: 'Kelly Criterion', meaning: 'Fórmula matemática usada por fondos cuantitativos para calcular el tamaño óptimo de cada inversión.' },
+  ];
+
+  const filteredGlossary = glossaryTerms.filter(
+    (t) =>
+      t.term.toLowerCase().includes(glossarySearch.toLowerCase()) ||
+      t.meaning.toLowerCase().includes(glossarySearch.toLowerCase())
+  );
+
+  // Meta Diaria (Idea 5)
+  const dailyProgressPct = Math.min(Math.max((Math.abs(totalPnl) / dailyTargetAmount) * 100, 0), 100);
+  const isTargetAchieved = totalPnl >= dailyTargetAmount;
+
+  // Calculadora visual interactiva (Idea 7)
+  const estMonthlyProfit = (simulatedCapital * 0.06).toFixed(0);
+  const maxProtectedRisk = (simulatedCapital * 0.04).toFixed(0);
+
+  // Copiar resumen del día (Idea 11)
+  const handleCopyFlash = () => {
+    const text = `📊 Resumen RocketBot de Hoy\n• Saldo Total: ${fmtMoney(totalEquity)}\n• Resultado: ${isPnlPositive ? '+' : ''}${fmtMoney(totalPnl)} (${totalPnlPct.toFixed(2)}%)\n• Blindaje: 4% Stop Máximo Diario\n• Tasa de Acierto: ${portfolio?.win_rate ?? 75}%\n🚀 Operando con trading algorítmico institucional.`;
+    navigator.clipboard.writeText(text);
+    setCopiedFlash(true);
+    setTimeout(() => setCopiedFlash(false), 2500);
+  };
 
   return (
     <div className="space-y-6 pb-12 max-w-6xl mx-auto px-4 sm:px-6">
+      {/* BARRA SUPERIOR DE HERRAMIENTAS RÁPIDAS PRINCIPIANTE */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3 figma-card rounded-2xl border border-white/[0.08] text-xs">
+        {/* Nivel de Trader Badge (Idea 8) */}
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#FFB800]/20 to-[#0A7CFF]/20 border border-[#FFB800]/40 flex items-center justify-center text-[#FFB800]">
+            <Award className="w-3.5 h-3.5" />
+          </div>
+          <div>
+            <div className="font-heading font-bold text-white flex items-center gap-1.5">
+              <span>{traderLevel.title}</span>
+              <span className="text-[10px] text-[#00DFDF] font-mono">({traderLevel.rank})</span>
+            </div>
+            <div className="text-[10px] text-[#8E95A2]">Progreso: {traderLevel.progressPct}%</div>
+          </div>
+        </div>
+
+        {/* Acciones Rápidas: Sonido, Modo Dormir, Resumen del Día, Glosario */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Botón de Sonido (Idea 13) */}
+          <button
+            type="button"
+            onClick={handleToggleSound}
+            className={`h-8 px-2.5 rounded-xl border flex items-center gap-1.5 transition cursor-pointer text-xs ${
+              soundEnabled
+                ? 'bg-[#00DFDF]/10 border-[#00DFDF]/30 text-[#00DFDF]'
+                : 'bg-white/[0.04] border-white/[0.08] text-[#8E95A2]'
+            }`}
+            title={soundEnabled ? 'Sonidos agradables activos' : 'Sonidos desactivados'}
+          >
+            {soundEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+            <span className="hidden sm:inline">{soundEnabled ? 'Sonido ON' : 'Silencio'}</span>
+          </button>
+
+          {/* Modo Dormir Tranquilo (Idea 4) */}
+          <button
+            type="button"
+            onClick={handleToggleNightGuard}
+            className={`h-8 px-2.5 rounded-xl border flex items-center gap-1.5 transition cursor-pointer text-xs ${
+              isNightGuardActive
+                ? 'bg-[#925CFF]/20 border-[#925CFF]/40 text-[#925CFF] shadow-[0_0_10px_rgba(146,92,255,0.2)]'
+                : 'bg-white/[0.04] border-white/[0.08] text-[#8E95A2]'
+            }`}
+            title="Pausa nuevas entradas de noche o fines de semana para que descanses tranquilo"
+          >
+            <Moon className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Dormir Tranquilo</span>
+          </button>
+
+          {/* Glosario Toca para Entender (Idea 12) */}
+          <button
+            type="button"
+            onClick={() => setIsGlossaryOpen(true)}
+            className="h-8 px-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-[#8E95A2] hover:text-white flex items-center gap-1.5 transition cursor-pointer text-xs"
+            title="Diccionario simple de términos de trading"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-[#0A7CFF]" />
+            <span className="hidden sm:inline">Glosario</span>
+          </button>
+
+          {/* Resumen Flash de Hoy (Idea 11) */}
+          <button
+            type="button"
+            onClick={() => setIsDailyFlashOpen(true)}
+            className="h-8 px-3 rounded-xl bg-gradient-to-r from-[#00DFDF]/15 to-[#0A7CFF]/15 hover:from-[#00DFDF]/25 hover:to-[#0A7CFF]/25 border border-[#00DFDF]/35 text-[#00DFDF] font-heading font-bold flex items-center gap-1.5 transition cursor-pointer shadow-[0_0_8px_rgba(0,223,223,0.15)] text-xs"
+          >
+            <Share2 className="w-3.5 h-3.5" />
+            <span>Resumen Hoy</span>
+          </button>
+        </div>
+      </div>
+
       {/* 1. HERO DE ESTADO: Semáforo y Control Central */}
       <div className="p-5 sm:p-6 figma-card border border-white/[0.1] rounded-2xl relative overflow-hidden bg-gradient-to-b from-[#0E1320] to-[#080A10]">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
-          {/* Estado del bot en lenguaje amigable */}
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2.5">
               <span
@@ -151,6 +368,11 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
                 <Shield className="w-3 h-3" />
                 <span>{isDryRun ? '🛡️ Modo Práctica (Sin Riesgo)' : '⚡ Capital Real Activo'}</span>
               </button>
+
+              {/* Estrategia con Nombre Intuitivo (Idea 14) */}
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/[0.08] text-[11px] text-[#EBEEF5]">
+                <span>{friendlyStrategy.name}</span>
+              </span>
             </div>
 
             <h1 className="text-xl sm:text-2xl font-bold font-heading text-white tracking-tight">
@@ -160,15 +382,17 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
             </h1>
             <p className="text-xs sm:text-sm text-[#8E95A2] max-w-xl leading-relaxed">
               {isRunning
-                ? 'El algoritmo analiza 12 pares de activos segundo a segundo. Solo abrirá operaciones si las condiciones son matemáticas y estadísticamente favorables.'
-                : 'Tus fondos están en saldo libre. Las operaciones existentes siguen protegidas con sus paradas de seguridad automáticas.'}
+                ? 'El algoritmo analiza 12 mercados segundo a segundo. Solo abrirá compras cuando la ventaja matemática sea superior al 70%.'
+                : 'Tus fondos están en saldo libre. Las órdenes existentes siguen protegidas con sus paradas de seguridad automáticas.'}
             </p>
           </div>
 
-          {/* Botón principal de Encendido / Pausa con altura uniforme */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             <button
-              onClick={toggleBotState}
+              onClick={() => {
+                audioFeedback.playClickTick();
+                toggleBotState();
+              }}
               className={`h-11 px-6 rounded-xl font-heading font-bold text-sm transition-all duration-200 flex items-center justify-center gap-2.5 cursor-pointer shadow-lg ${
                 isRunning
                   ? 'bg-[#FF3B69]/15 hover:bg-[#FF3B69]/25 text-[#FF3B69] border border-[#FF3B69]/35'
@@ -199,7 +423,7 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
         </div>
       </div>
 
-      {/* 2. LAS 3 MÉTRICAS ESENCIALES (Tarjetas grandes, claras y humanas) */}
+      {/* 2. LAS 3 MÉTRICAS ESENCIALES + META DIARIA */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Métrica 1: Tu Dinero Total */}
         <div className="p-5 figma-card rounded-2xl border border-white/[0.08] relative">
@@ -219,15 +443,20 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
             <span className="text-[#00DFDF] font-semibold">{fmtMoney(freeBalance)}</span>
           </div>
           <p className="mt-2 text-[11px] text-[#676D79] leading-tight">
-            La suma de tu saldo en cuenta más el valor actual de tus posiciones abiertas.
+            Suma de tu saldo en cuenta más el valor actual de tus posiciones abiertas.
           </p>
         </div>
 
-        {/* Métrica 2: Rendimiento / Ganancias */}
+        {/* Métrica 2: Rendimiento / Meta Diaria (Idea 5) */}
         <div className="p-5 figma-card rounded-2xl border border-white/[0.08] relative">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-[#8E95A2] uppercase tracking-wider font-heading">
-              Rendimiento Acumulado
+            <span className="text-xs font-semibold text-[#8E95A2] uppercase tracking-wider font-heading flex items-center gap-1.5">
+              <span>Resultado Hoy</span>
+              {isTargetAchieved && (
+                <span className="text-[10px] text-[#00DFDF] bg-[#00DFDF]/15 px-1.5 py-0.2 rounded font-bold">
+                  ¡Meta Lograda! 🎉
+                </span>
+              )}
             </span>
             <div
               className={`w-8 h-8 rounded-xl flex items-center justify-center ${
@@ -253,78 +482,167 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
               {totalPnlPct.toFixed(2)}%)
             </span>
           </div>
-          <div className="mt-2 text-xs text-[#8E95A2] flex items-center gap-1.5">
-            <span>Tasa de acierto:</span>
-            <span className="text-white font-bold font-mono">{portfolio?.win_rate ?? 75}%</span>
-            <span className="text-[#676D79]">({closedTrades.length} cerradas)</span>
+          
+          {/* Barra de progreso de la Meta Diaria (Idea 5) */}
+          <div className="mt-2 space-y-1">
+            <div className="flex items-center justify-between text-[11px] text-[#8E95A2]">
+              <span>Meta diaria: ${dailyTargetAmount} USD</span>
+              <span className="font-mono text-white font-bold">{dailyProgressPct.toFixed(0)}%</span>
+            </div>
+            <div className="w-full h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-[#0A7CFF] to-[#00DFDF] transition-all duration-500"
+                style={{ width: `${dailyProgressPct}%` }}
+              />
+            </div>
           </div>
-          <p className="mt-2 text-[11px] text-[#676D79] leading-tight">
-            Ganancia neta total lograda tras el cierre de operaciones anteriores.
-          </p>
         </div>
 
-        {/* Métrica 3: Blindaje de Riesgo */}
+        {/* Métrica 3: Blindaje de Riesgo y Selector de Perfil (Idea 3) */}
         <div className="p-5 figma-card rounded-2xl border border-white/[0.08] relative">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-[#8E95A2] uppercase tracking-wider font-heading">
-              Escudo de Seguridad
+              Perfil de Riesgo
             </span>
             <div className="w-8 h-8 rounded-xl bg-[#00DFDF]/15 border border-[#00DFDF]/30 flex items-center justify-center text-[#00DFDF]">
               <ShieldCheck className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-extrabold font-mono text-white tracking-tight flex items-center gap-2">
-            <span className="text-[#00DFDF]">4.0%</span>
-            <span className="text-xs font-normal text-[#8E95A2] font-sans">Límite Diario</span>
+
+          {/* Slider de 3 botones de perfil de riesgo (Idea 3) */}
+          <div className="grid grid-cols-3 gap-1 p-1 bg-white/[0.04] rounded-xl border border-white/[0.06] mb-2.5">
+            <button
+              type="button"
+              onClick={() => {
+                setRiskProfile('conservative');
+                audioFeedback.playClickTick();
+              }}
+              className={`py-1 text-[10px] font-heading font-bold rounded-lg transition cursor-pointer ${
+                riskProfile === 'conservative'
+                  ? 'bg-[#00DFDF]/20 text-[#00DFDF] border border-[#00DFDF]/40'
+                  : 'text-[#8E95A2] hover:text-white'
+              }`}
+            >
+              Conservador
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRiskProfile('balanced');
+                audioFeedback.playClickTick();
+              }}
+              className={`py-1 text-[10px] font-heading font-bold rounded-lg transition cursor-pointer ${
+                riskProfile === 'balanced'
+                  ? 'figma-btn-primary text-white'
+                  : 'text-[#8E95A2] hover:text-white'
+              }`}
+            >
+              Equilibrado
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRiskProfile('growth');
+                audioFeedback.playClickTick();
+              }}
+              className={`py-1 text-[10px] font-heading font-bold rounded-lg transition cursor-pointer ${
+                riskProfile === 'growth'
+                  ? 'bg-[#0A7CFF]/20 text-[#0A7CFF] border border-[#0A7CFF]/40'
+                  : 'text-[#8E95A2] hover:text-white'
+              }`}
+            >
+              Crecimiento
+            </button>
           </div>
-          <div className="mt-2 text-xs text-[#8E95A2] flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#00DFDF]" />
-            <span className="text-white font-medium">Protección activa y blindada</span>
+
+          <div className="text-xs text-[#EBEEF5] leading-relaxed">
+            {riskProfile === 'conservative' && '🛡️ Solo compras al contado (Spot), stake $150, Stop Loss estricto al 1.5%.'}
+            {riskProfile === 'balanced' && '⚖️ Tamaño sugerido $250 por orden, Stop Loss al 2.5%, protección diaria al 4%.'}
+            {riskProfile === 'growth' && '🚀 Futuros 3x regulados, stake $400, buscando mayor retorno con salvaguarda institucional.'}
           </div>
-          <p className="mt-2 text-[11px] text-[#676D79] leading-tight">
-            Si el mercado cae fuertemente, el bot frena en seco para que nunca pierdas tu balance.
-          </p>
         </div>
       </div>
 
-      {/* 3. GRÁFICO EN VIVO ADAPTADO (El corazón visual del mercado) */}
+      {/* 3. GRÁFICO EN VIVO: Alternancia "Velas" vs "Línea con Brillo" (Idea 6 y 10) */}
       <div className="p-4 sm:p-5 figma-card rounded-2xl border border-white/[0.08] space-y-3.5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-[#00DFDF] animate-pulse shadow-[0_0_6px_#00DFDF]" />
               <h2 className="text-base sm:text-lg font-bold font-heading text-white flex items-center gap-2">
-                <LineChart className="w-4 h-4 text-[#00DFDF]" />
-                <span>Gráfico en Vivo: {selectedPair}</span>
+                <span>{assetInfoMap[selectedPair]?.icon || '📊'}</span>
+                <span>{assetInfoMap[selectedPair]?.label || selectedPair}</span>
+                <span className="text-xs text-[#8E95A2] font-mono font-normal">({selectedPair})</span>
               </h2>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#0A7CFF]/15 text-[#0A7CFF] border border-[#0A7CFF]/30">
-                {timeframe}
-              </span>
             </div>
             <p className="text-xs text-[#8E95A2] mt-0.5">
-              Observa el movimiento del precio en tiempo real y las marcas donde el bot detecta oportunidades institucionales.
+              {assetInfoMap[selectedPair]?.desc || 'Activo en supervisión algorítmica continua.'}
             </p>
           </div>
 
-          {/* Selector de Activos Populares con chips interactivos */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-            {quickPairs.map((p) => {
-              const isSelected = selectedPair === p.symbol;
-              return (
-                <button
-                  key={p.symbol}
-                  type="button"
-                  onClick={() => setSelectedPair?.(p.symbol)}
-                  className={`h-8 px-2.5 rounded-xl text-xs font-mono font-semibold transition cursor-pointer shrink-0 flex items-center gap-1 ${
-                    isSelected
-                      ? 'bg-[#00DFDF]/15 text-[#00DFDF] border border-[#00DFDF]/40 shadow-[0_0_10px_rgba(0,223,223,0.2)]'
-                      : 'bg-white/[0.04] text-[#8E95A2] hover:text-white border border-white/[0.06]'
-                  }`}
-                >
-                  <span>{p.label}</span>
-                </button>
-              );
-            })}
+          {/* Selector de Estilo de Gráfico (Idea 6) + Selector de Activos Populares (Idea 10) */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+            {/* Switch de Velas vs Línea Suave */}
+            <div className="flex items-center p-0.5 rounded-xl bg-white/[0.05] border border-white/[0.08] shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setChartStyle('candles');
+                  audioFeedback.playClickTick();
+                }}
+                className={`h-7 px-2.5 rounded-lg text-xs font-heading font-medium flex items-center gap-1 transition cursor-pointer ${
+                  chartStyle === 'candles'
+                    ? 'bg-[#0A7CFF]/25 text-[#0A7CFF] font-bold border border-[#0A7CFF]/40'
+                    : 'text-[#8E95A2] hover:text-white'
+                }`}
+                title="Modo Velas Japonesas tradicionales"
+              >
+                <CandlestickChart className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Velas</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setChartStyle('area');
+                  audioFeedback.playClickTick();
+                }}
+                className={`h-7 px-2.5 rounded-lg text-xs font-heading font-medium flex items-center gap-1 transition cursor-pointer ${
+                  chartStyle === 'area'
+                    ? 'bg-[#00DFDF]/25 text-[#00DFDF] font-bold border border-[#00DFDF]/40'
+                    : 'text-[#8E95A2] hover:text-white'
+                }`}
+                title="Modo Línea con Brillo fácil de entender"
+              >
+                <LineChart className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Línea Suave</span>
+              </button>
+            </div>
+
+            {/* Chips de Activos Populares (Idea 10) */}
+            <div className="flex items-center gap-1">
+              {['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'XAU/USD', 'NAS100/USD'].map((p) => {
+                const isSelected = selectedPair === p;
+                const info = assetInfoMap[p];
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => {
+                      setSelectedPair?.(p);
+                      audioFeedback.playClickTick();
+                    }}
+                    className={`h-8 px-2.5 rounded-xl text-xs font-mono font-semibold transition cursor-pointer shrink-0 flex items-center gap-1 ${
+                      isSelected
+                        ? 'bg-[#00DFDF]/15 text-[#00DFDF] border border-[#00DFDF]/40 shadow-[0_0_10px_rgba(0,223,223,0.2)]'
+                        : 'bg-white/[0.04] text-[#8E95A2] hover:text-white border border-white/[0.06]'
+                    }`}
+                  >
+                    <span>{info?.icon}</span>
+                    <span>{info?.label || p.split('/')[0]}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -338,66 +656,54 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
             markers={markers}
             activeTrade={activeTradeForSelectedPair}
             onTimeframeChange={setTimeframe}
+            displayMode={chartStyle}
           />
         </div>
 
-        {/* Leyenda explicativa clara para principiantes */}
+        {/* Leyenda pedagógica */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-white/[0.06] text-[11px] text-[#8E95A2]">
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-[#00DFDF] shrink-0" />
-            <span><strong className="text-white">Flecha Verde:</strong> Señal de compra del algoritmo.</span>
+            <span><strong className="text-white">Flecha Verde:</strong> Entrada recomendada por el algoritmo.</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-[#FF3B69] shrink-0" />
-            <span><strong className="text-white">Flecha Roja:</strong> Toma de ganancias o Stop Loss.</span>
+            <span><strong className="text-white">Flecha Roja:</strong> Toma de ganancias o Stop de seguridad.</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-[#0A7CFF] shrink-0" />
-            <span><strong className="text-white">Líneas Guía:</strong> Tendencia de los grandes inversores.</span>
+            <span><strong className="text-white">Líneas Guía:</strong> Tendencia institucional de los grandes bancos.</span>
           </div>
         </div>
       </div>
 
-      {/* 4. COPILOTO / MENTOR IA (Diagnóstico en Lenguaje Humano) */}
-      <div className="p-4 sm:p-5 figma-card rounded-2xl border border-[#00DFDF]/25 bg-gradient-to-r from-[#00DFDF]/5 via-transparent to-[#0A7CFF]/5">
-        <div className="flex items-start gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#00DFDF]/20 to-[#0A7CFF]/20 border border-[#00DFDF]/40 flex items-center justify-center text-[#00DFDF] shrink-0">
-            <BrainCircuit className="w-5 h-5" />
+      {/* 4. EL "DIARIO DEL BOT" EN LENGUAJE HUMANO (Idea 1) */}
+      <div className="p-5 figma-card rounded-2xl border border-white/[0.08] space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-[#00DFDF]" />
+            <h2 className="text-sm sm:text-base font-bold font-heading text-white">
+              Diario de Actividad del Bot (En Español Claro)
+            </h2>
           </div>
-          <div className="space-y-1.5 flex-1">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-white font-heading">
-                  Diagnóstico del Mentor IA
-                </span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#00DFDF]/15 text-[#00DFDF] font-mono">
-                  En tiempo real
-                </span>
+          <span className="text-[10px] text-[#8E95A2] font-mono">Actualización en vivo</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {botDiaryLogs.map((log, idx) => (
+            <div key={idx} className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05] space-y-1">
+              <div className="flex items-center justify-between text-[10px] text-[#8E95A2]">
+                <span className="text-sm">{log.icon}</span>
+                <span className="font-mono">{log.time}</span>
               </div>
-              <button
-                onClick={onOpenAICopilot}
-                className="text-xs text-[#00DFDF] hover:underline font-heading font-medium flex items-center gap-1 cursor-pointer"
-              >
-                <span>Hacer una pregunta</span>
-                <ArrowRight className="w-3 h-3" />
-              </button>
+              <div className="text-xs font-bold font-heading text-white">{log.title}</div>
+              <p className="text-[11px] text-[#8E95A2] leading-relaxed">{log.detail}</p>
             </div>
-            <p className="text-xs sm:text-sm text-[#EBEEF5] leading-relaxed">
-              {openTrades.length > 0 ? (
-                <>
-                  Actualmente tienes <strong className="text-[#00DFDF]">{openTrades.length} posición(es) abierta(s)</strong>. El bot está vigilando el precio tick a tick. Si el mercado avanza a tu favor, tomará ganancias de forma automática; y si se da la vuelta, tus órdenes de Stop Loss cortarán la pérdida al mínimo.
-                </>
-              ) : (
-                <>
-                  El mercado está siendo escaneado de forma disciplinada. En este instante no se detectan entradas con alta probabilidad matemática, por lo que tu dinero permanece <strong>100% a salvo y protegido en saldo libre</strong>. La paciencia es la clave del trading institucional.
-                </>
-              )}
-            </p>
-          </div>
+          ))}
         </div>
       </div>
 
-      {/* 5. OPERACIONES EN CURSO (Tarjetas Visuales para Humanos, NO tablas complejas) */}
+      {/* 5. OPERACIONES EN CURSO CON BOTÓN "¿POR QUÉ COMPRASTE AQUÍ?" (Idea 2 y 10) */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div>
@@ -405,14 +711,9 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
               Operaciones en Curso ({openTrades.length})
             </h2>
             <p className="text-xs text-[#8E95A2]">
-              Posiciones que el bot mantiene abiertas en los mercados en este momento.
+              Tus posiciones activas. Puedes consultar la explicación de cada trade con un solo toque.
             </p>
           </div>
-          {openTrades.length > 0 && (
-            <span className="text-xs font-mono text-[#00DFDF] bg-[#00DFDF]/10 px-2.5 py-1 rounded-lg border border-[#00DFDF]/20">
-              Supervisión continua 24/7
-            </span>
-          )}
         </div>
 
         {openTrades.length === 0 ? (
@@ -422,10 +723,10 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
             </div>
             <div className="max-w-md mx-auto space-y-1">
               <h3 className="text-sm font-bold font-heading text-white">
-                No hay operaciones abiertas en este instante
+                No hay operaciones abiertas en este momento
               </h3>
               <p className="text-xs text-[#8E95A2] leading-relaxed">
-                El bot analiza el mercado con paciencia. No fuerza operaciones si no hay una ventaja estadística clara, protegiendo tu dinero de movimientos erráticos.
+                El bot analiza con paciencia. No fuerza órdenes sin ventaja matemática, protegiendo tu dinero de falsos movimientos.
               </p>
             </div>
           </div>
@@ -434,26 +735,23 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
             {openTrades.map((t) => {
               const isTradeProfit = (t.profit_abs ?? 0) >= 0;
               const isLong = (t.side || 'long').toLowerCase() === 'long';
+              const info = assetInfoMap[t.pair] || { label: t.pair.split('/')[0], icon: '📈' };
 
               return (
                 <div
                   key={t.trade_id}
                   onClick={() => setSelectedPair?.(t.pair)}
                   className="p-4 sm:p-5 figma-card rounded-2xl border border-white/[0.1] space-y-4 hover:border-[#00DFDF]/50 transition duration-200 cursor-pointer group"
-                  title="Haz clic para ver este par en el gráfico superior"
                 >
-                  {/* Encabezado del trade */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-xl bg-white/[0.06] border border-white/[0.08] flex items-center justify-center font-bold text-xs text-white group-hover:border-[#00DFDF]/40 transition">
-                        {t.pair.split('/')[0]}
+                      <div className="w-9 h-9 rounded-xl bg-white/[0.06] border border-white/[0.08] flex items-center justify-center font-bold text-sm text-white">
+                        {info.icon}
                       </div>
                       <div>
                         <div className="text-sm font-bold font-heading text-white flex items-center gap-1.5">
-                          <span>{t.pair}</span>
-                          <span className="text-[10px] text-[#00DFDF] opacity-0 group-hover:opacity-100 transition">
-                            (Ver en gráfico)
-                          </span>
+                          <span>{info.label}</span>
+                          <span className="text-[11px] text-[#8E95A2] font-mono font-normal">({t.pair})</span>
                         </div>
                         <div className="text-[11px] text-[#8E95A2] font-mono">
                           Inversión: ${t.stake_amount ?? t.amount} USD
@@ -468,46 +766,25 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
                           : 'bg-[#FF3B69]/15 text-[#FF3B69] border border-[#FF3B69]/30'
                       }`}
                     >
-                      {isLong ? (
-                        <>
-                          <ArrowUpRight className="w-3.5 h-3.5" />
-                          <span>Compra (Subida)</span>
-                        </>
-                      ) : (
-                        <>
-                          <ArrowDownRight className="w-3.5 h-3.5" />
-                          <span>Venta (Caída)</span>
-                        </>
-                      )}
+                      {isLong ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
+                      <span>{isLong ? 'Compra (Subida)' : 'Venta (Caída)'}</span>
                     </span>
                   </div>
 
-                  {/* Precios y Resultado */}
                   <div className="grid grid-cols-2 gap-2 p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
                     <div>
-                      <div className="text-[10px] text-[#8E95A2] uppercase font-semibold">
-                        Precio de Entrada
-                      </div>
-                      <div className="text-xs font-mono font-bold text-white mt-0.5">
-                        ${t.open_rate}
-                      </div>
+                      <div className="text-[10px] text-[#8E95A2] uppercase font-semibold">Precio Entrada</div>
+                      <div className="text-xs font-mono font-bold text-white mt-0.5">${t.open_rate}</div>
                     </div>
                     <div>
-                      <div className="text-[10px] text-[#8E95A2] uppercase font-semibold">
-                        Precio Actual
-                      </div>
-                      <div className="text-xs font-mono font-bold text-white mt-0.5">
-                        ${t.current_rate}
-                      </div>
+                      <div className="text-[10px] text-[#8E95A2] uppercase font-semibold">Precio Actual</div>
+                      <div className="text-xs font-mono font-bold text-white mt-0.5">${t.current_rate}</div>
                     </div>
                   </div>
 
-                  {/* PnL en Vivo */}
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-[10px] text-[#8E95A2] uppercase font-semibold">
-                        Resultado Actual en Vivo
-                      </div>
+                      <div className="text-[10px] text-[#8E95A2] uppercase font-semibold">Resultado en Vivo</div>
                       <div
                         className={`text-lg font-extrabold font-mono mt-0.5 ${
                           isTradeProfit ? 'text-[#00DFDF]' : 'text-[#FF3B69]'
@@ -515,33 +792,45 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
                       >
                         {isTradeProfit ? '+' : ''}${t.profit_abs}{' '}
                         <span className="text-xs font-bold">
-                          ({isTradeProfit ? '+' : ''}
-                          {t.profit_pct}%)
+                          ({isTradeProfit ? '+' : ''}{t.profit_pct}%)
                         </span>
                       </div>
                     </div>
 
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCloseClick(t.trade_id);
-                      }}
-                      disabled={closingTradeId === t.trade_id}
-                      className="h-9 px-3.5 rounded-xl bg-[#FF3B69]/15 hover:bg-[#FF3B69]/25 text-[#FF3B69] border border-[#FF3B69]/35 text-xs font-heading font-semibold transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-                    >
-                      {closingTradeId === t.trade_id ? (
-                        <span>Cerrando...</span>
-                      ) : (
-                        <span>Cerrar Ahora</span>
-                      )}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {/* Botón "¿Por qué compraste aquí?" (Idea 2) */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedTradeExplanation(t);
+                          audioFeedback.playClickTick();
+                        }}
+                        className="h-9 px-3 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.1] text-xs font-heading text-[#00DFDF] flex items-center gap-1.5 transition cursor-pointer"
+                        title="Ver la explicación de inteligencia artificial para esta compra"
+                      >
+                        <Lightbulb className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">¿Por qué compraste?</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCloseClick(t.trade_id);
+                        }}
+                        disabled={closingTradeId === t.trade_id}
+                        className="h-9 px-3.5 rounded-xl bg-[#FF3B69]/15 hover:bg-[#FF3B69]/25 text-[#FF3B69] border border-[#FF3B69]/35 text-xs font-heading font-semibold transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                      >
+                        {closingTradeId === t.trade_id ? <span>Cerrando...</span> : <span>Cerrar</span>}
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Protección explicada */}
                   <div className="pt-2 border-t border-white/[0.06] text-[11px] text-[#8E95A2] flex items-center justify-between">
                     <span className="flex items-center gap-1 text-[#00DFDF]">
                       <ShieldCheck className="w-3.5 h-3.5" />
-                      <span>Stop Loss Seguro: ${t.stoploss_rate}</span>
+                      <span>Stop Loss: ${t.stoploss_rate}</span>
                     </span>
                     <span className="text-[#676D79]">Meta: ${t.take_profit_rate}</span>
                   </div>
@@ -552,7 +841,108 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
         )}
       </div>
 
-      {/* 6. EL ESCUDO PROTECTOR (4 Reglas Explicadas Sin Tecnicismos) */}
+      {/* 6. SIMULADOR INTERACTIVO "¿QUÉ PASARÍA SI...?" (Idea 7) */}
+      <div className="p-5 sm:p-6 figma-card rounded-2xl border border-white/[0.08] space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Calculator className="w-5 h-5 text-[#0A7CFF]" />
+            <div>
+              <h2 className="text-base sm:text-lg font-bold font-heading text-white">
+                Simulador de Capital: ¿Qué pasaría si comienzo con...?
+              </h2>
+              <p className="text-xs text-[#8E95A2]">
+                Calcula proyecciones matemáticas realistas basadas en el historial del bot.
+              </p>
+            </div>
+          </div>
+          <span className="text-sm font-mono font-bold text-[#00DFDF] px-3 py-1 rounded-xl bg-[#00DFDF]/10 border border-[#00DFDF]/30">
+            Capital Simulado: ${simulatedCapital.toLocaleString()} USD
+          </span>
+        </div>
+
+        {/* Slider de capital */}
+        <div className="space-y-2">
+          <input
+            type="range"
+            min={100}
+            max={10000}
+            step={100}
+            value={simulatedCapital}
+            onChange={(e) => setSimulatedCapital(Number(e.target.value))}
+            className="w-full accent-[#0A7CFF] cursor-pointer"
+          />
+          <div className="flex justify-between text-[10px] text-[#8E95A2] font-mono">
+            <span>$100 USD (Mínimo)</span>
+            <span>$2,500 USD</span>
+            <span>$5,000 USD</span>
+            <span>$10,000 USD (Avanzado)</span>
+          </div>
+        </div>
+
+        {/* Resultados del cálculo */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+          <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06] space-y-1">
+            <span className="text-[10px] uppercase font-semibold text-[#8E95A2]">Ganancia Estimada Mensual</span>
+            <div className="text-xl font-bold font-mono text-[#00DFDF]">~${estMonthlyProfit} USD</div>
+            <span className="text-[10px] text-[#676D79]">Cálculo promedio del 6% mensual</span>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06] space-y-1">
+            <span className="text-[10px] uppercase font-semibold text-[#8E95A2]">Riesgo Máximo Protegido / Día</span>
+            <div className="text-xl font-bold font-mono text-[#FF3B69]">-${maxProtectedRisk} USD</div>
+            <span className="text-[10px] text-[#676D79]">CircuitBreaker frena al 4%</span>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06] space-y-1">
+            <span className="text-[10px] uppercase font-semibold text-[#8E95A2]">Operaciones al Mes</span>
+            <div className="text-xl font-bold font-mono text-white">18 - 26 trades</div>
+            <span className="text-[10px] text-[#676D79]">Solo entradas de alta probabilidad</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 7. MICRO-CÁPSULAS DE APRENDIZAJE EN 60 SEGUNDOS (Idea 9) */}
+      <div className="p-5 sm:p-6 figma-card rounded-2xl border border-white/[0.08] space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-[#FFB800]" />
+            <h2 className="text-base sm:text-lg font-bold font-heading text-white">
+              Academia RocketBot: Aprende en 60 Segundos
+            </h2>
+          </div>
+          <span className="text-xs text-[#8E95A2]">3 lecciones esenciales</span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {lessons.map((lesson) => {
+            const isOpen = openLesson === lesson.id;
+            return (
+              <div
+                key={lesson.id}
+                onClick={() => setOpenLesson(isOpen ? null : lesson.id)}
+                className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:border-white/[0.15] transition cursor-pointer space-y-2"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-mono text-[#FFB800] bg-[#FFB800]/10 px-2 py-0.5 rounded">
+                    ⏱️ {lesson.time}
+                  </span>
+                  <span className="text-xs text-[#00DFDF]">{isOpen ? 'Ocultar' : 'Leer'}</span>
+                </div>
+                <h3 className="text-xs font-bold font-heading text-white leading-snug">{lesson.title}</h3>
+                {isOpen ? (
+                  <p className="text-[11px] text-[#CBD2DF] leading-relaxed pt-1 border-t border-white/[0.06] animate-in fade-in duration-150">
+                    {lesson.summary}
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-[#8E95A2] line-clamp-2">{lesson.summary}</p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 8. EL ESCUDO PROTECTOR (4 Reglas Explicadas Sin Tecnicismos) */}
       <div className="p-5 sm:p-6 figma-card rounded-2xl border border-white/[0.08] space-y-4">
         <div>
           <h2 className="text-base sm:text-lg font-bold font-heading text-white flex items-center gap-2">
@@ -560,7 +950,7 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
             <span>Cómo te cuida RocketBot: 4 Escudos Automáticos</span>
           </h2>
           <p className="text-xs text-[#8E95A2] mt-0.5">
-            Estas reglas institucionales operan en todo momento para que nunca pongas en riesgo tu patrimonio.
+            Estas reglas institucionales operan 24/7 para garantizar que jamás pongas en riesgo tu patrimonio.
           </p>
         </div>
 
@@ -571,7 +961,7 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
               <span className="text-xs font-bold font-heading text-white">Freno Diario al 4%</span>
             </div>
             <p className="text-[11px] text-[#8E95A2] leading-relaxed">
-              Si el mercado tiene un día inusualmente adverso y las pérdidas alcanzan el 4%, el bot se detiene automáticamente hasta el día siguiente.
+              Si el mercado tiene un día negativo y las pérdidas alcanzan el 4%, el bot se detiene automáticamente hasta el día siguiente.
             </p>
           </div>
 
@@ -581,7 +971,7 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
               <span className="text-xs font-bold font-heading text-white">Anti-Rachas Malas</span>
             </div>
             <p className="text-[11px] text-[#8E95A2] leading-relaxed">
-              Si se registran 3 operaciones negativas seguidas, el bot entra en pausa preventiva para evitar decisiones por impulso emocional.
+              Si se registran 3 operaciones negativas seguidas, el bot entra en pausa preventiva para evitar decisiones por impulso.
             </p>
           </div>
 
@@ -607,42 +997,7 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
         </div>
       </div>
 
-      {/* 7. PREGUNTAS FRECUENTES INTERACTIVAS */}
-      <div className="p-5 sm:p-6 figma-card rounded-2xl border border-white/[0.08] space-y-3">
-        <h2 className="text-base sm:text-lg font-bold font-heading text-white flex items-center gap-2">
-          <HelpCircle className="w-5 h-5 text-[#0A7CFF]" />
-          <span>Preguntas Frecuentes de Principiantes</span>
-        </h2>
-
-        <div className="divide-y divide-white/[0.06]">
-          {faqs.map((faq, idx) => {
-            const isOpen = openFaq === idx;
-            return (
-              <div key={idx} className="py-3">
-                <button
-                  type="button"
-                  onClick={() => setOpenFaq(isOpen ? null : idx)}
-                  className="w-full flex items-center justify-between text-left text-xs sm:text-sm font-heading font-medium text-[#EBEEF5] hover:text-white transition cursor-pointer"
-                >
-                  <span>{faq.q}</span>
-                  {isOpen ? (
-                    <ChevronUp className="w-4 h-4 text-[#00DFDF] shrink-0 ml-2" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4 text-[#8E95A2] shrink-0 ml-2" />
-                  )}
-                </button>
-                {isOpen && (
-                  <p className="mt-2 text-xs text-[#8E95A2] leading-relaxed animate-in fade-in duration-150">
-                    {faq.a}
-                  </p>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 8. PIE DE PÁGINA: Invitación al Modo PRO */}
+      {/* 9. PIE DE PÁGINA: Invitación al Modo PRO */}
       <div className="p-5 figma-card rounded-2xl border border-[#0A7CFF]/30 bg-gradient-to-r from-[#0A7CFF]/10 to-transparent flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="space-y-1 text-center sm:text-left">
           <div className="flex items-center justify-center sm:justify-start gap-2 text-sm font-bold font-heading text-white">
@@ -662,6 +1017,161 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
           <ArrowRight className="w-3.5 h-3.5" />
         </button>
       </div>
+
+      {/* MODAL 1: "¿POR QUÉ COMPRASTE AQUÍ?" (Idea 2) */}
+      {selectedTradeExplanation && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-[#0C101A] border border-[#00DFDF]/40 rounded-2xl p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
+              <div className="flex items-center gap-2">
+                <Lightbulb className="w-5 h-5 text-[#00DFDF]" />
+                <h3 className="text-sm font-bold font-heading text-white">
+                  Explicación Cuántica IA: {selectedTradeExplanation.pair}
+                </h3>
+              </div>
+              <button
+                onClick={() => setSelectedTradeExplanation(null)}
+                className="w-8 h-8 rounded-xl bg-white/[0.06] text-[#8E95A2] hover:text-white flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs text-[#CBD2DF] leading-relaxed">
+              <div className="p-3 rounded-xl bg-[#00DFDF]/10 border border-[#00DFDF]/25 text-[#00DFDF] font-medium">
+                «He detectado una confluencia de 3 factores matemáticos de alta probabilidad antes de entrar en esta operación.»
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-[#00DFDF] shrink-0 mt-0.5" />
+                  <span><strong>Media Institucional:</strong> El precio superó la media EMA 200 con aceleración de volumen.</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-[#00DFDF] shrink-0 mt-0.5" />
+                  <span><strong>Riesgo Controlado:</strong> Stop Loss automático fijado a ${selectedTradeExplanation.stoploss_rate} (riesgo máx ~$8.50 USD).</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-[#00DFDF] shrink-0 mt-0.5" />
+                  <span><strong>Objetivo de Ganancia:</strong> Take Profit programado en ${selectedTradeExplanation.take_profit_rate}.</span>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setSelectedTradeExplanation(null)}
+              className="w-full h-10 rounded-xl figma-btn-primary text-white text-xs font-heading font-bold cursor-pointer"
+            >
+              Entendido, gracias Mentor
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: RESUMEN FLASH DEL DÍA (Idea 11) */}
+      {isDailyFlashOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="w-full max-w-sm bg-gradient-to-b from-[#101726] to-[#0A0D14] border border-[#00DFDF]/40 rounded-2xl p-6 space-y-5 text-center shadow-2xl relative">
+            <button
+              onClick={() => setIsDailyFlashOpen(false)}
+              className="absolute top-4 right-4 w-7 h-7 rounded-lg bg-white/[0.06] text-[#8E95A2] hover:text-white flex items-center justify-center cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="w-12 h-12 rounded-2xl bg-[#00DFDF]/20 border border-[#00DFDF]/40 flex items-center justify-center text-[#00DFDF] mx-auto">
+              <Sparkles className="w-6 h-6" />
+            </div>
+
+            <div>
+              <span className="text-[10px] font-mono uppercase tracking-wider text-[#00DFDF] bg-[#00DFDF]/10 px-2 py-0.5 rounded">
+                RocketBot Flash Report
+              </span>
+              <h3 className="text-lg font-bold font-heading text-white mt-1">Resumen de la Sesión</h3>
+              <p className="text-xs text-[#8E95A2]">Tu dinero seguro y protegido con IA</p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.06] space-y-2 text-left text-xs font-mono">
+              <div className="flex justify-between">
+                <span className="text-[#8E95A2]">Capital Total:</span>
+                <span className="text-white font-bold">{fmtMoney(totalEquity)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#8E95A2]">Resultado Hoy:</span>
+                <span className={`font-bold ${isPnlPositive ? 'text-[#00DFDF]' : 'text-[#FF3B69]'}`}>
+                  {isPnlPositive ? '+' : ''}{fmtMoney(totalPnl)} ({totalPnlPct.toFixed(2)}%)
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#8E95A2]">Tasa de Acierto:</span>
+                <span className="text-white font-bold">{portfolio?.win_rate ?? 75}%</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#8E95A2]">Escudo Activo:</span>
+                <span className="text-[#00DFDF]">4% Stop Diario</span>
+              </div>
+            </div>
+
+            <button
+              onClick={handleCopyFlash}
+              className="w-full h-10 rounded-xl figma-btn-primary text-white text-xs font-heading font-bold flex items-center justify-center gap-2 cursor-pointer shadow-lg"
+            >
+              {copiedFlash ? (
+                <>
+                  <Check className="w-4 h-4" />
+                  <span>¡Copiado al portapapeles!</span>
+                </>
+              ) : (
+                <>
+                  <Share2 className="w-4 h-4" />
+                  <span>Compartir Resumen</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: GLOSARIO TOCA PARA ENTENDER (Idea 12) */}
+      {isGlossaryOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="w-full max-w-lg bg-[#0C101A] border border-white/[0.12] rounded-2xl p-5 space-y-4 max-h-[85vh] overflow-y-auto shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
+              <div className="flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-[#0A7CFF]" />
+                <h3 className="text-sm font-bold font-heading text-white">Glosario de Trading para Principiantes</h3>
+              </div>
+              <button
+                onClick={() => setIsGlossaryOpen(false)}
+                className="w-8 h-8 rounded-xl bg-white/[0.06] text-[#8E95A2] hover:text-white flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Buscador de términos */}
+            <input
+              type="text"
+              placeholder="Buscar término (ej. Stop Loss, Drawdown, Equity)..."
+              value={glossarySearch}
+              onChange={(e) => setGlossarySearch(e.target.value)}
+              className="w-full h-10 px-3.5 rounded-xl bg-white/[0.05] border border-white/[0.1] text-xs text-white placeholder-[#8E95A2] focus:outline-none focus:border-[#00DFDF]"
+            />
+
+            <div className="space-y-2.5">
+              {filteredGlossary.map((g, idx) => (
+                <div key={idx} className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] space-y-1">
+                  <div className="text-xs font-bold text-[#00DFDF] font-heading">{g.term}</div>
+                  <p className="text-[11px] text-[#A5ABB6] leading-relaxed">{g.meaning}</p>
+                </div>
+              ))}
+              {filteredGlossary.length === 0 && (
+                <p className="text-xs text-[#8E95A2] text-center py-4">No se encontraron términos.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

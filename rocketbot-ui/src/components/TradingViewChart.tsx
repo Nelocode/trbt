@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   createChart,
   CandlestickSeries,
+  AreaSeries,
   LineSeries,
   HistogramSeries,
   createSeriesMarkers,
@@ -60,6 +61,7 @@ interface TradingViewChartProps {
   markers: ChartMarker[];
   activeTrade?: OpenTradeOverlay;
   onTimeframeChange: (tf: string) => void;
+  displayMode?: 'candles' | 'area';
 }
 
 export const TradingViewChart: React.FC<TradingViewChartProps> = ({
@@ -70,10 +72,11 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
   markers,
   activeTrade,
   onTimeframeChange,
+  displayMode = 'candles',
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const candleSeriesRef = useRef<any>(null);
   const ema21Ref = useRef<ISeriesApi<'Line'> | null>(null);
   const ema50Ref = useRef<ISeriesApi<'Line'> | null>(null);
   const ema200Ref = useRef<ISeriesApi<'Line'> | null>(null);
@@ -129,14 +132,21 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
       },
     });
 
-    const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: '#00DFDF',
-      downColor: '#FF3B69',
-      borderUpColor: '#00DFDF',
-      borderDownColor: '#FF3B69',
-      wickUpColor: '#00DFDF',
-      wickDownColor: '#FF3B69',
-    });
+    const candleSeries = displayMode === 'area'
+      ? chart.addSeries(AreaSeries, {
+          topColor: 'rgba(0, 223, 223, 0.35)',
+          bottomColor: 'rgba(0, 223, 223, 0.01)',
+          lineColor: '#00DFDF',
+          lineWidth: 2,
+        })
+      : chart.addSeries(CandlestickSeries, {
+          upColor: '#00DFDF',
+          downColor: '#FF3B69',
+          borderUpColor: '#00DFDF',
+          borderDownColor: '#FF3B69',
+          wickUpColor: '#00DFDF',
+          wickDownColor: '#FF3B69',
+        });
 
     try {
       markersPluginRef.current = createSeriesMarkers(candleSeries, []);
@@ -219,7 +229,7 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
       volumeRef.current = null;
       priceLinesRef.current = [];
     };
-  }, []);
+  }, [displayMode]);
 
   useEffect(() => {
     if (!candleSeriesRef.current || !Array.isArray(candles) || candles.length === 0) return;
@@ -243,14 +253,22 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
       const sortedCandles = Array.from(timeMap.values()).sort((a, b) => a.time - b.time);
       if (sortedCandles.length === 0) return;
 
-      const formattedCandles = sortedCandles.map((c) => ({
-        time: c.time as UTCTimestamp,
-        open: c.open,
-        high: typeof c.high === 'number' && !isNaN(c.high) ? c.high : Math.max(c.open, c.close),
-        low: typeof c.low === 'number' && !isNaN(c.low) ? c.low : Math.min(c.open, c.close),
-        close: c.close,
-      }));
-      candleSeriesRef.current.setData(formattedCandles);
+      if (displayMode === 'area') {
+        const areaData = sortedCandles.map((c) => ({
+          time: c.time as UTCTimestamp,
+          value: c.close,
+        }));
+        candleSeriesRef.current.setData(areaData);
+      } else {
+        const formattedCandles = sortedCandles.map((c) => ({
+          time: c.time as UTCTimestamp,
+          open: c.open,
+          high: typeof c.high === 'number' && !isNaN(c.high) ? c.high : Math.max(c.open, c.close),
+          low: typeof c.low === 'number' && !isNaN(c.low) ? c.low : Math.min(c.open, c.close),
+          close: c.close,
+        }));
+        candleSeriesRef.current.setData(formattedCandles);
+      }
       setHoveredCandle(sortedCandles[sortedCandles.length - 1]);
 
       if (volumeRef.current) {
