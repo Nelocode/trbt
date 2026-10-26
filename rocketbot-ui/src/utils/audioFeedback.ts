@@ -128,6 +128,42 @@ class AudioFeedbackService {
       osc.stop(now + 0.04);
     } catch {}
   }
+
+  // Tono triunfal icónico estilo Xbox / Steam Achievement Unlocked
+  public playAchievementFanfare() {
+    if (!this.isEnabled) return;
+    try {
+      this.initContext();
+      if (!this.ctx) return;
+
+      const now = this.ctx.currentTime;
+      // Secuencia armónica brillante: F5, G5, A5, C6, D6, F6
+      const notes = [698.46, 783.99, 880.00, 1046.50, 1174.66, 1396.91];
+
+      notes.forEach((freq, index) => {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        // Mezcla onda triangular y senoidal para un brillo campana metálica
+        osc.type = index === notes.length - 1 ? 'sine' : 'triangle';
+        osc.frequency.setValueAtTime(freq, now + index * 0.065);
+
+        const duration = index === notes.length - 1 ? 0.75 : 0.28;
+        const noteStart = now + index * 0.065;
+
+        gain.gain.setValueAtTime(0, noteStart);
+        gain.gain.linearRampToValueAtTime(0.12, noteStart + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0005, noteStart + duration);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(noteStart);
+        osc.stop(noteStart + duration);
+      });
+    } catch {}
+  }
 }
 
 export const audioFeedback = new AudioFeedbackService();

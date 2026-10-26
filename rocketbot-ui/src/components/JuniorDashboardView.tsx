@@ -33,6 +33,7 @@ import {
   CandlestickChart,
   Lightbulb,
   Compass,
+  Trophy,
 } from 'lucide-react';
 import {
   TradingViewChart,
@@ -43,6 +44,7 @@ import {
 import { InfoTooltip } from './InfoTooltip';
 import { JuniorInteractiveTour } from './JuniorInteractiveTour';
 import { audioFeedback } from '../utils/audioFeedback';
+import { achievementsService } from '../utils/achievementsService';
 
 interface JuniorDashboardViewProps {
   portfolio: any;
@@ -55,6 +57,7 @@ interface JuniorDashboardViewProps {
   fmtMoney: (val: number | undefined | null) => string;
   onOpenAICopilot: () => void;
   onSwitchToPro: () => void;
+  onOpenAchievements?: () => void;
   accountName?: string;
   selectedPair?: string;
   setSelectedPair?: (pair: string) => void;
@@ -76,6 +79,7 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
   fmtMoney,
   onOpenAICopilot,
   onSwitchToPro,
+  onOpenAchievements,
   accountName = 'Mi Cuenta de Trading',
   selectedPair = 'BTC/USDT',
   setSelectedPair,
@@ -103,9 +107,19 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
   const [isGlossaryOpen, setIsGlossaryOpen] = useState<boolean>(false);
   const [glossarySearch, setGlossarySearch] = useState<string>('');
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => audioFeedback.getSoundEnabled());
+  const [achievementsStats, setAchievementsStats] = useState(() => achievementsService.getStats());
   const [showChecklist, setShowChecklist] = useState<boolean>(() => {
     return localStorage.getItem('rocketbot_hide_checklist') !== 'true';
   });
+
+  // Suscribirse a cambios en logros y evaluar hitos
+  React.useEffect(() => {
+    const unsub = achievementsService.subscribe(() => {
+      setAchievementsStats(achievementsService.getStats());
+    });
+    achievementsService.evaluateTradingMilestones(portfolio, openTrades, closedTrades);
+    return () => unsub();
+  }, [portfolio, openTrades, closedTrades]);
 
   const isRunning = portfolio?.bot_state === 'RUNNING' || portfolio?.state === 'RUNNING';
   const isDryRun = portfolio?.dry_run !== false;
@@ -127,6 +141,9 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
         localStorage.setItem('rocketbot_night_guard', String(next));
       } catch {}
       audioFeedback.playClickTick();
+      if (next) {
+        achievementsService.unlock('risk_05');
+      }
       return next;
     });
   };
@@ -363,11 +380,29 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
 
         {/* Acciones Rápidas: Tour, Sonido, Modo Dormir, Resumen del Día, Glosario */}
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Botón Sala de Trofeos (200 Logros) */}
+          <button
+            type="button"
+            onClick={() => {
+              audioFeedback.playClickTick();
+              if (onOpenAchievements) onOpenAchievements();
+            }}
+            className="h-8 px-2.5 sm:px-3 rounded-xl bg-gradient-to-r from-amber-500/20 to-yellow-500/15 hover:from-amber-500/30 hover:to-yellow-500/25 border border-amber-500/40 text-amber-300 flex items-center gap-1.5 transition cursor-pointer font-heading font-bold text-xs shadow-[0_0_12px_rgba(251,191,36,0.2)]"
+            title="Abrir Sala de Trofeos: 200 Logros Desbloqueables"
+          >
+            <Trophy className="w-3.5 h-3.5 text-amber-400" />
+            <span>200 Logros</span>
+            <span className="text-[10px] bg-amber-400/25 text-amber-200 px-1.5 py-0.2 rounded font-mono">
+              {achievementsStats.unlockedCount}
+            </span>
+          </button>
+
           {/* Botón Tour Principiante */}
           <button
             type="button"
             onClick={() => {
               audioFeedback.playClickTick();
+              achievementsService.unlock('acad_02');
               setIsTourOpen(true);
             }}
             className="h-8 px-2.5 sm:px-3 rounded-xl bg-[#00DFDF]/10 hover:bg-[#00DFDF]/20 border border-[#00DFDF]/30 text-[#00DFDF] flex items-center gap-1.5 transition cursor-pointer font-heading font-bold text-xs"
@@ -422,7 +457,10 @@ export const JuniorDashboardView: React.FC<JuniorDashboardViewProps> = ({
           {/* Glosario Toca para Entender */}
           <button
             type="button"
-            onClick={() => setIsGlossaryOpen(true)}
+            onClick={() => {
+              achievementsService.unlock('acad_03');
+              setIsGlossaryOpen(true);
+            }}
             className="h-8 px-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-[#8E95A2] hover:text-white flex items-center gap-1.5 transition cursor-pointer text-xs"
             title="Diccionario simple de términos de trading"
           >

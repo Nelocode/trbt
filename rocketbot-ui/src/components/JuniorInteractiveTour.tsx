@@ -11,6 +11,7 @@ import {
   Award,
 } from 'lucide-react';
 import { audioFeedback } from '../utils/audioFeedback';
+import { achievementsService } from '../utils/achievementsService';
 
 export interface JuniorTourStep {
   id: string;
@@ -179,6 +180,7 @@ export const JuniorInteractiveTour: React.FC<JuniorInteractiveTourProps> = ({ is
       setCurrentStepIndex((prev) => prev + 1);
     } else {
       audioFeedback.playChimeSuccess();
+      achievementsService.unlock('acad_02');
       onClose();
     }
   };

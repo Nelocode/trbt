@@ -55,6 +55,9 @@ import { UserManagementModal } from './components/UserManagementModal';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { ForceChangePasswordModal } from './components/ForceChangePasswordModal';
 import { ConfirmLiveCapitalModal } from './components/ConfirmLiveCapitalModal';
+import { AchievementToast } from './components/AchievementToast';
+import { AchievementsModal } from './components/AchievementsModal';
+import { achievementsService } from './utils/achievementsService';
 
 // Auto-detección dinámica para producción en Docker, Easypanel o desarrollo local
 const getApiBase = () => {
@@ -119,6 +122,16 @@ export default function App() {
   const [isUserManagementOpen, setIsUserManagementOpen] = useState<boolean>(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState<boolean>(false);
   const [isConfirmLiveOpen, setIsConfirmLiveOpen] = useState<boolean>(false);
+  const [isAchievementsOpen, setIsAchievementsOpen] = useState<boolean>(false);
+  const [unlockedCount, setUnlockedCount] = useState<number>(() => achievementsService.getStats().unlockedCount);
+
+  // Suscribirse a cambios de logros y gamificación
+  useEffect(() => {
+    const unsub = achievementsService.subscribe(() => {
+      setUnlockedCount(achievementsService.getStats().unlockedCount);
+    });
+    return () => unsub();
+  }, []);
 
   const handleForcePasswordChanged = () => {
     if (currentUser) {
@@ -675,6 +688,19 @@ export default function App() {
               <span className="w-1.5 h-1.5 rounded-full bg-[#00DFDF] inline-block" />
             </button>
 
+            {/* Botón Sala de Trofeos (200 Logros Desbloqueables) */}
+            <button
+              onClick={() => setIsAchievementsOpen(true)}
+              className="h-8 sm:h-9 px-2.5 sm:px-3 rounded-xl bg-gradient-to-r from-amber-500/15 to-yellow-500/10 hover:from-amber-500/25 hover:to-yellow-500/20 border border-amber-500/35 text-amber-300 text-xs font-heading font-bold transition cursor-pointer flex items-center gap-1.5 shadow-[0_0_12px_rgba(251,191,36,0.15)] shrink-0"
+              title="Sala de Trofeos: 200 Logros Desbloqueables"
+            >
+              <Trophy className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden md:inline">200 Logros</span>
+              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-400/20 text-amber-200">
+                {unlockedCount}
+              </span>
+            </button>
+
             {/* Herramientas de Barra PRO (Desktop) */}
             {experienceMode === 'pro' && (
               <div className="hidden lg:flex items-center gap-1">
@@ -816,6 +842,7 @@ export default function App() {
             fmtMoney={fmtMoney}
             onOpenAICopilot={() => setIsAIOpen(true)}
             onSwitchToPro={() => handleSetExperienceMode('pro')}
+            onOpenAchievements={() => setIsAchievementsOpen(true)}
             accountName={portfolio?.name || portfolio?.account_name || activeAccountId}
             selectedPair={selectedPair}
             setSelectedPair={setSelectedPair}
@@ -1632,6 +1659,22 @@ export default function App() {
 
                 <button
                   onClick={() => {
+                    setIsAchievementsOpen(true);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="col-span-2 h-10 rounded-xl bg-gradient-to-r from-amber-500/20 to-yellow-500/15 border border-amber-500/40 text-amber-300 text-xs font-heading font-bold flex items-center justify-between px-3 cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    <Trophy className="w-4 h-4 text-amber-400" />
+                    <span>Sala de Trofeos (200 Logros)</span>
+                  </div>
+                  <span className="text-[10px] font-mono bg-amber-400/25 text-amber-200 px-2 py-0.5 rounded">
+                    {unlockedCount} / 200
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => {
                     setIsCorrelationOpen(true);
                     setIsMobileMenuOpen(false);
                   }}
@@ -1736,6 +1779,15 @@ export default function App() {
           </div>
         </button>
       )}
+
+      {/* Toast Animado Estilo Xbox / Steam para Notificaciones de Logros */}
+      <AchievementToast onOpenTrophyRoom={() => setIsAchievementsOpen(true)} />
+
+      {/* Modal Sala de Trofeos (200 Logros Cuánticos Desbloqueables) */}
+      <AchievementsModal
+        isOpen={isAchievementsOpen}
+        onClose={() => setIsAchievementsOpen(false)}
+      />
     </div>
   );
 }
