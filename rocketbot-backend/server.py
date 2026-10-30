@@ -39,7 +39,7 @@ if hasattr(time, "tzset"):
 import ccxt.async_support as ccxt_async
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Header
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Header, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
