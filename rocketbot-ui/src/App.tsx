@@ -60,8 +60,6 @@ import { AchievementToast } from './components/AchievementToast';
 import { AchievementsModal } from './components/AchievementsModal';
 import { EngineStartWizardModal } from './components/EngineStartWizardModal';
 import { ConnectExchangeModal } from './components/ConnectExchangeModal';
-import { CyberTerminalView } from './components/CyberTerminalView';
-import { AcademyModal } from './components/AcademyModal';
 import { achievementsService } from './utils/achievementsService';
 
 // Auto-detección dinámica para producción en Docker, Easypanel o desarrollo local
@@ -106,7 +104,6 @@ export default function App() {
   const [isNewAccountModalOpen, setIsNewAccountModalOpen] = useState<boolean>(false);
   const [isMasterModalOpen, setIsMasterModalOpen] = useState<boolean>(false);
   const [isConnectExchangeModalOpen, setIsConnectExchangeModalOpen] = useState<boolean>(false);
-  const [isAcademyModalOpen, setIsAcademyModalOpen] = useState<boolean>(false);
 
   // Autenticación JWT y Roles RBAC
   const [authToken, setAuthToken] = useState<string>(() => {
@@ -212,15 +209,15 @@ export default function App() {
     }
   }, [authToken]);
 
-  const [experienceMode, setExperienceMode] = useState<'junior' | 'pro' | 'cyber'>(() => {
+  const [experienceMode, setExperienceMode] = useState<'junior' | 'pro'>(() => {
     try {
-      return (localStorage.getItem('rocketbot_experience_mode') as 'junior' | 'pro' | 'cyber') || 'cyber';
+      return (localStorage.getItem('rocketbot_experience_mode') as 'junior' | 'pro') || 'junior';
     } catch {
-      return 'cyber';
+      return 'junior';
     }
   });
 
-  const handleSetExperienceMode = (mode: 'junior' | 'pro' | 'cyber') => {
+  const handleSetExperienceMode = (mode: 'junior' | 'pro') => {
     setExperienceMode(mode);
     try {
       localStorage.setItem('rocketbot_experience_mode', mode);
@@ -619,27 +616,13 @@ export default function App() {
             <div className="flex items-center p-0.5 rounded-xl bg-white/[0.05] border border-white/[0.1] text-xs font-heading">
               <button
                 type="button"
-                onClick={() => handleSetExperienceMode('cyber')}
-                className={`h-7 sm:h-8 px-2 sm:px-3 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
-                  experienceMode === 'cyber'
-                    ? 'bg-gradient-to-r from-[#FF2E93]/25 to-purple-600/25 text-[#FF2E93] border border-[#FF2E93]/50 font-bold shadow-[0_0_12px_rgba(255,46,147,0.3)]'
-                    : 'text-[#8E95A2] hover:text-white font-medium'
-                }`}
-                title="Modo Cyber Terminal: Vista ultra-limpia, futurista y con Grafo de Fuerzas de IA"
-              >
-                <span>🔮</span>
-                <span className="text-[11px] sm:text-xs">Cyber</span>
-              </button>
-
-              <button
-                type="button"
                 onClick={() => handleSetExperienceMode('junior')}
                 className={`h-7 sm:h-8 px-2 sm:px-3 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
                   experienceMode === 'junior'
                     ? 'bg-gradient-to-r from-[#00DFDF]/20 to-[#0A7CFF]/20 text-[#00DFDF] border border-[#00DFDF]/40 font-bold shadow-[0_0_10px_rgba(0,223,223,0.2)]'
                     : 'text-[#8E95A2] hover:text-white font-medium'
                 }`}
-                title="Modo Principiante: Interfaz asistida y sin jerga técnica para aprender con confianza"
+                title="Modo Principiante: Interfaz limpia, asistida y sin jerga técnica para aprender con confianza"
               >
                 <span>🌱</span>
                 <span className="text-[11px] sm:text-xs">Principiante</span>
@@ -933,33 +916,8 @@ export default function App() {
         )}
       </header>
 
-      {/* Vistas Dinámicas: Cyber Terminal (Nueva limpia), Principiante (Junior) e Institucional PRO */}
-      {experienceMode === 'cyber' ? (
-        <main className="relative z-10 flex-1 py-3">
-          <CyberTerminalView
-            portfolio={portfolio}
-            openTrades={openTrades}
-            closedTrades={closedTrades}
-            toggleBotState={toggleBotState}
-            toggleDryRunMode={toggleDryRunMode}
-            handleForceExit={handleForceExit}
-            isPrivacyMode={isPrivacyMode}
-            fmtMoney={fmtMoney}
-            onOpenAICopilot={() => setIsAIOpen(true)}
-            onOpenAchievements={() => setIsAchievementsOpen(true)}
-            onOpenAcademy={() => setIsAcademyModalOpen(true)}
-            onOpenConnectExchange={() => setIsConnectExchangeModalOpen(true)}
-            onOpenEngineWizard={() => setIsEngineWizardOpen(true)}
-            selectedPair={selectedPair}
-            setSelectedPair={setSelectedPair}
-            timeframe={timeframe}
-            setTimeframe={setTimeframe}
-            candles={candles}
-            markers={markers}
-            activeTradeForSelectedPair={activeTradeForSelectedPair}
-          />
-        </main>
-      ) : experienceMode === 'junior' ? (
+      {/* Vista Principiante (Junior) vs Vista Institucional PRO */}
+      {experienceMode === 'junior' ? (
         <main className="relative z-10 flex-1 py-4">
           <JuniorDashboardView
             portfolio={portfolio}
@@ -1694,15 +1652,6 @@ export default function App() {
         }}
       />
 
-      {/* Modal de la Academia Cuantitativa RocketBot */}
-      <AcademyModal
-        isOpen={isAcademyModalOpen}
-        onClose={() => setIsAcademyModalOpen(false)}
-        onCompleteLesson={(lessonId) => {
-          achievementsService.unlock('acad_01');
-        }}
-      />
-
       {/* Drawer / Menú Móvil Adaptativo */}
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
@@ -1752,34 +1701,20 @@ export default function App() {
               <span className="text-[11px] font-semibold uppercase text-[#8E95A2] font-heading">
                 Modo de Visualización
               </span>
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleSetExperienceMode('cyber');
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className={`h-10 rounded-xl text-xs font-heading font-bold flex items-center justify-center gap-1.5 border transition cursor-pointer ${
-                    experienceMode === 'cyber'
-                      ? 'bg-gradient-to-r from-[#FF2E93]/25 to-purple-600/25 text-[#FF2E93] border-[#FF2E93]/50'
-                      : 'bg-white/[0.04] border-white/[0.08] text-[#8E95A2]'
-                  }`}
-                >
-                  <span>🔮 Cyber</span>
-                </button>
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => {
                     handleSetExperienceMode('junior');
                     setIsMobileMenuOpen(false);
                   }}
-                  className={`h-10 rounded-xl text-xs font-heading font-bold flex items-center justify-center gap-1.5 border transition cursor-pointer ${
+                  className={`h-10 rounded-xl text-xs font-heading font-bold flex items-center justify-center gap-2 border transition cursor-pointer ${
                     experienceMode === 'junior'
                       ? 'bg-gradient-to-r from-[#00DFDF]/20 to-[#0A7CFF]/20 text-[#00DFDF] border-[#00DFDF]/40'
                       : 'bg-white/[0.04] border-white/[0.08] text-[#8E95A2]'
                   }`}
                 >
-                  <span>🌱 Junior</span>
+                  <span>🌱 Principiante</span>
                 </button>
                 <button
                   type="button"
@@ -1787,13 +1722,13 @@ export default function App() {
                     handleSetExperienceMode('pro');
                     setIsMobileMenuOpen(false);
                   }}
-                  className={`h-10 rounded-xl text-xs font-heading font-bold flex items-center justify-center gap-1.5 border transition cursor-pointer ${
+                  className={`h-10 rounded-xl text-xs font-heading font-bold flex items-center justify-center gap-2 border transition cursor-pointer ${
                     experienceMode === 'pro'
                       ? 'figma-btn-primary text-white'
                       : 'bg-white/[0.04] border-white/[0.08] text-[#8E95A2]'
                   }`}
                 >
-                  <span>⚡ PRO</span>
+                  <span>⚡ Modo PRO</span>
                 </button>
               </div>
             </div>
