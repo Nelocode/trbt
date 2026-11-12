@@ -2009,8 +2009,20 @@ async def get_kelly_sizing():
 @app.get("/api/v1/analytics/correlation-matrix")
 async def get_correlation_matrix():
     """Genera la matriz de correlación cruzada rolling de 30 períodos entre los 12 activos."""
-    candles_dict = {pair: orchestrator.market.get_candles(pair, "5m", 60) for pair in orchestrator.market.PAIRS}
-    matrix_data = CorrelationMatrixEngine.compute(candles_dict)
+    pair_candles: Dict[str, List[Dict[str, Any]]] = {}
+    for pair in orchestrator.market.PAIRS:
+        cache_key = f"{pair}:5m"
+        df = orchestrator.market.ohlcv_cache.get(cache_key)
+        if df is None or df.empty:
+            try:
+                df = await orchestrator.market.fetch_pair_ohlcv(pair, "5m", limit=60)
+            except Exception:
+                df = None
+        if df is not None and not df.empty:
+            pair_candles[pair] = [{"close": float(c)} for c in df["close"].tail(60)]
+        else:
+            pair_candles[pair] = []
+    matrix_data = CorrelationMatrixEngine.compute(pair_candles)
     return matrix_data
 
 
