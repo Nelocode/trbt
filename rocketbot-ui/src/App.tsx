@@ -395,6 +395,23 @@ export default function App() {
         ) {
           setIsEngineWizardOpen(true);
         }
+      } else if (res.status !== 401) {
+        // Fallback resiliente a la cuenta predeterminada si la cuenta guardada no responde o fue renombrada
+        const fallbackRes = await fetch(`${API_BASE}/api/v1/overview`, { headers });
+        if (fallbackRes.ok) {
+          const fallbackData = await fallbackRes.json();
+          if (fallbackData.account?.account_id) {
+            setActiveAccountId(fallbackData.account.account_id);
+            try {
+              localStorage.setItem('rocketbot_active_account_id', fallbackData.account.account_id);
+            } catch {}
+          }
+          setPortfolio(fallbackData.portfolio);
+          setOpenTrades(fallbackData.open_trades);
+          setClosedTrades(fallbackData.closed_trades);
+          setRadarSignals(fallbackData.radar);
+          setFreqaiPredictions(fallbackData.freqai_predictions || []);
+        }
       }
       try {
         const kRes = await fetch(`${API_BASE}/api/v1/risk/kelly-sizing`, { headers });

@@ -63,6 +63,8 @@ circuit_breaker = CircuitBreakerEngine(max_daily_loss_pct=4.0, max_consecutive_l
 def get_account_protections(acc: Any = None) -> List[Dict[str, Any]]:
     """Devuelve el estado de las protecciones cuantitativas y salvaguardas de la cuenta."""
     rules = getattr(acc, "prop_firm_rules", {}) if acc else {}
+    if not isinstance(rules, dict):
+        rules = {}
     is_prop = getattr(acc, "account_type", "") == "prop_firm" if acc else False
 
     loss_limit = rules.get("max_daily_loss_pct", 5.0) if is_prop else getattr(circuit_breaker, "max_daily_loss_pct", 4.0)
@@ -1987,14 +1989,16 @@ async def update_circuit_breaker_settings(payload: UpdateCircuitBreakerPayload):
 @app.get("/api/v1/risk/kelly-sizing")
 async def get_kelly_sizing():
     """Calcula el dimensionamiento óptimo de posición según el Criterio de Kelly Fraccional."""
-    win_rate = orchestrator.get_portfolio_summary().get("win_rate", 75.0)
+    portfolio_summary = orchestrator.get_portfolio_summary()
+    win_rate = portfolio_summary.get("win_rate", 75.0)
     # Calcular profit factor aproximado a partir de cerradas
     gains = sum(t["profit_abs"] for t in orchestrator.closed_trades if t["profit_abs"] > 0)
     losses = abs(sum(t["profit_abs"] for t in orchestrator.closed_trades if t["profit_abs"] < 0)) or 1.0
     profit_factor = max(1.1, gains / losses)
 
+    equity_val = portfolio_summary.get("total_equity", orchestrator.starting_balance)
     res = KellySizingCalculator.calculate(
-        equity=orchestrator.total_equity,
+        equity=equity_val,
         win_rate_pct=win_rate,
         profit_factor=profit_factor,
         fraction=0.35,
@@ -2013,7 +2017,7 @@ async def get_correlation_matrix():
 @app.post("/api/v1/backtest/monte-carlo")
 async def run_monte_carlo_stress_test(payload: MonteCarloRequestPayload):
     """Ejecuta una simulación estocástica de Monte Carlo con 10,000 caminos de capital."""
-    starting_equity = payload.starting_equity or orchestrator.total_equity
+    starting_equity = payload.starting_equity or orchestrator.get_portfolio_summary().get("total_equity", orchestrator.starting_balance)
     result = MonteCarloSimulator.run(
         trades=orchestrator.closed_trades,
         starting_equity=starting_equity,

@@ -20,8 +20,10 @@ import asyncio
 import json
 import logging
 import os
+import re
 import shutil
 import time
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -60,14 +62,15 @@ class AccountInstance:
         self.created_at: str = config.get("created_at", datetime.now(timezone.utc).isoformat())
 
         # Parámetros específicos de Prop Firm si aplica
-        self.prop_firm_rules: Dict[str, Any] = config.get(
-            "prop_firm_rules",
-            {
+        raw_rules = config.get("prop_firm_rules")
+        if isinstance(raw_rules, dict):
+            self.prop_firm_rules = raw_rules
+        else:
+            self.prop_firm_rules = {
                 "max_daily_loss_pct": 5.0,
                 "max_total_loss_pct": 10.0,
                 "profit_target_pct": 8.0,
-            },
-        )
+            }
 
         # Contenedores de operaciones aislados
         self.open_trades: List[Dict[str, Any]] = []
@@ -208,7 +211,7 @@ class AccountInstance:
         """Devuelve las métricas consolidadas de esta cuenta para la interfaz y la API."""
         wins = sum(1 for t in self.closed_trades if t.get("profit_abs", 0) > 0)
         total_closed = len(self.closed_trades)
-        win_rate = round((wins / total_closed * 100) if total_closed > 0 else 75.0, 1)
+        win_rate = round((wins / total_closed * 100) if total_closed > 0 else 0.0, 1)
 
         total_pnl = round(self.realized_pnl + self.unrealized_pnl, 2)
         total_pnl_pct = round(((self.total_equity - self.starting_balance) / self.starting_balance) * 100, 2)
@@ -609,8 +612,16 @@ class MultiAccountPool:
         """Crea una nueva cuenta aislada e inicializa su directorio de persistencia."""
         raw_name = payload.get("name", "Nueva Subcuenta")
         acc_type = payload.get("account_type", "dry_run")
-        slug_prefix = "acc_" + "".join(c for c in raw_name.lower().replace(" ", "_") if c.isalnum() or c == "_")
-        slug = f"{slug_prefix}_{int(time.time()) % 10000}"
+        clean_slug = unicodedata.normalize("NFKD", raw_name).encode("ASCII", "ignore").decode("ASCII")
+        clean_prefix = re.sub(r"[^a-zA-Z0-9]+", "_", clean_slug.lower()).strip("_")
+        slug = f"acc_{clean_prefix}_{int(time.time()) % 10000}" if clean_prefix else f"acc_sub_{int(time.time()) % 10000}"
+
+        raw_rules = payload.get("prop_firm_rules")
+        prop_rules = raw_rules if isinstance(raw_rules, dict) else {
+            "max_daily_loss_pct": 5.0,
+            "max_total_loss_pct": 10.0,
+            "profit_target_pct": 8.0,
+        }
 
         config = {
             "account_id": slug,
@@ -630,11 +641,7 @@ class MultiAccountPool:
             "leverage": float(payload.get("leverage", 3.0)),
             "max_open_trades": int(payload.get("max_open_trades", 5)),
             "stake_amount": float(payload.get("stake_amount", 250.0)),
-            "prop_firm_rules": payload.get("prop_firm_rules", {
-                "max_daily_loss_pct": 5.0,
-                "max_total_loss_pct": 10.0,
-                "profit_target_pct": 8.0,
-            }),
+            "prop_firm_rules": prop_rules,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
 
@@ -674,7 +681,7 @@ class MultiAccountPool:
             sum(1 for t in a.closed_trades if t.get("profit_abs", 0) > 0)
             for a in self.accounts.values()
         )
-        combined_win_rate = round((all_closed_wins / total_closed * 100) if total_closed > 0 else 75.0, 1)
+        combined_win_rate = round((all_closed_wins / total_closed * 100) if total_closed > 0 else 0.0, 1)
         total_pnl = round(combined_realized + combined_unrealized, 2)
         total_pnl_pct = round(((combined_equity - total_starting) / total_starting * 100) if total_starting > 0 else 0, 2)
 
