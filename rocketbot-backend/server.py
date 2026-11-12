@@ -211,6 +211,7 @@ class SaveStrategyPayload(BaseModel):
 
 
 class BotModeUpdate(BaseModel):
+    account_id: Optional[str] = None
     state: Optional[str] = None          # "RUNNING" | "PAUSED" | "STOPPED"
     trading_mode: Optional[str] = None   # "futures" | "spot"
     dry_run: Optional[bool] = None
@@ -1015,8 +1016,8 @@ async def background_market_loop() -> None:
 # ---------------------------------------------------------------------------
 # Dependencias y Helpers de Seguridad y Autenticación RBAC
 # ---------------------------------------------------------------------------
-def get_current_user_optional(authorization: Optional[str] = Header(None)) -> Optional[Dict[str, Any]]:
-    if not authorization:
+def get_current_user_optional(authorization: Any = Header(None)) -> Optional[Dict[str, Any]]:
+    if not authorization or not isinstance(authorization, str):
         return None
     parts = authorization.split()
     if len(parts) == 2 and parts[0].lower() == "bearer":
@@ -1519,6 +1520,10 @@ async def get_overview(account_id: Optional[str] = None, authorization: Optional
     acc_summary = acc.get_summary()
 
     portfolio = {
+        "state": acc.state,
+        "bot_state": acc.state,
+        "name": acc.name,
+        "account_id": acc.account_id,
         "total_equity": acc.total_equity,
         "free_balance": acc.free_balance,
         "used_margin": acc.used_margin,
@@ -1529,7 +1534,6 @@ async def get_overview(account_id: Optional[str] = None, authorization: Optional
         "open_trades_count": len(acc.open_trades),
         "max_open_trades": acc.max_open_trades,
         "win_rate": acc_summary["win_rate"],
-        "bot_state": acc.state,
         "trading_mode": acc.trading_mode,
         "dry_run": acc.dry_run,
         "exchange": acc.exchange,
@@ -1643,10 +1647,14 @@ async def get_pair_candles(
 @app.post("/api/v1/bot/control")
 async def update_bot_control(payload: BotModeUpdate, authorization: Optional[str] = Header(None)):
     user = get_current_user_optional(authorization)
-    if user and user.get("role") == "viewer":
-        raise HTTPException(status_code=403, detail="Los usuarios con rol Viewer solo tienen permisos de lectura y no pueden alterar el estado operativo del bot.")
+    target_id = payload.account_id or multi_account_pool.active_account_id
+    if user:
+        if user.get("role") == "viewer":
+            raise HTTPException(status_code=403, detail="Los usuarios con rol Viewer solo tienen permisos de lectura y no pueden alterar el estado operativo del bot.")
+        if not auth_manager.can_access_account(user, target_id):
+            raise HTTPException(status_code=403, detail="No tienes autorización para modificar los controles de esta subcuenta.")
 
-    acc = multi_account_pool.get_account()
+    acc = multi_account_pool.get_account(target_id)
     if payload.state:
         orchestrator.state = payload.state.upper()
         acc.state = payload.state.upper()
@@ -1667,7 +1675,34 @@ async def update_bot_control(payload: BotModeUpdate, authorization: Optional[str
     if payload.exchange_name:
         await orchestrator.market.init_exchange(payload.exchange_name)
     await orchestrator.refresh_all_pairs()
-    return orchestrator.get_portfolio_summary()
+
+    acc.recalculate_open_trades(orchestrator.market.live_prices)
+    acc_summary = acc.get_summary()
+
+    portfolio = {
+        "state": acc.state,
+        "bot_state": acc.state,
+        "name": acc.name,
+        "account_id": acc.account_id,
+        "total_equity": acc.total_equity,
+        "free_balance": acc.free_balance,
+        "used_margin": acc.used_margin,
+        "realized_pnl": acc.realized_pnl,
+        "unrealized_pnl": acc.unrealized_pnl,
+        "total_pnl": acc_summary["total_pnl"],
+        "total_pnl_pct": acc_summary["total_pnl_pct"],
+        "open_trades_count": len(acc.open_trades),
+        "max_open_trades": acc.max_open_trades,
+        "win_rate": acc_summary["win_rate"],
+        "trading_mode": acc.trading_mode,
+        "dry_run": acc.dry_run,
+        "exchange": acc.exchange,
+        "active_strategy": acc.active_strategy,
+        "leverage": acc.leverage,
+        "last_update": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "protections": get_account_protections(acc),
+    }
+    return portfolio
 
 
 @app.post("/api/v1/trade/force-enter")
@@ -2128,6 +2163,10 @@ async def websocket_realtime_stream(websocket: WebSocket):
             acc_summary = acc.get_summary()
 
             portfolio = {
+                "state": acc.state,
+                "bot_state": acc.state,
+                "name": acc.name,
+                "account_id": acc.account_id,
                 "total_equity": acc.total_equity,
                 "free_balance": acc.free_balance,
                 "used_margin": acc.used_margin,
@@ -2138,7 +2177,6 @@ async def websocket_realtime_stream(websocket: WebSocket):
                 "open_trades_count": len(acc.open_trades),
                 "max_open_trades": acc.max_open_trades,
                 "win_rate": acc_summary["win_rate"],
-                "bot_state": acc.state,
                 "trading_mode": acc.trading_mode,
                 "dry_run": acc.dry_run,
                 "exchange": acc.exchange,

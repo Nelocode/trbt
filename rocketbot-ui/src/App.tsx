@@ -158,16 +158,17 @@ export default function App() {
 
   const handleSetDryRun = async (dryRunVal: boolean) => {
     try {
+      setPortfolio((prev: any) => ({ ...prev, dry_run: dryRunVal }));
       const res = await fetch(`${API_BASE}/api/v1/bot/control`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         },
-        body: JSON.stringify({ dry_run: dryRunVal }),
+        body: JSON.stringify({ dry_run: dryRunVal, account_id: activeAccountId }),
       });
       if (res.ok) {
-        setPortfolio((prev: any) => ({ ...prev, dry_run: dryRunVal }));
+        setPortfolio(await res.json());
       }
     } catch {}
   };
@@ -258,6 +259,8 @@ export default function App() {
 
   const handleAccountSwitched = (accId: string, accData?: AccountSummary) => {
     setActiveAccountId(accId);
+    setOpenTrades([]);
+    setClosedTrades([]);
     try {
       localStorage.setItem('rocketbot_active_account_id', accId);
     } catch {}
@@ -265,6 +268,8 @@ export default function App() {
       setPortfolio((prev: any) => ({
         ...prev,
         ...accData,
+        state: accData.state,
+        bot_state: accData.state,
         trading_mode: accData.trading_mode,
         dry_run: accData.dry_run,
         exchange: accData.exchange,
@@ -461,6 +466,10 @@ export default function App() {
         try {
           const msg = JSON.parse(event.data);
           if (msg.type === 'tick_update') {
+            // Protección contra ticks cruzados de subcuentas distintas
+            if (msg.account_id && msg.account_id !== activeAccountId) {
+              return;
+            }
             setPortfolio(msg.portfolio);
             setOpenTrades(msg.open_trades);
             setRadarSignals(msg.radar);
@@ -484,23 +493,42 @@ export default function App() {
   }, [activeAccountId]);
 
   async function toggleBotState() {
-    const nextState = portfolio.state === 'RUNNING' ? 'PAUSED' : 'RUNNING';
-    const res = await fetch(`${API_BASE}/api/v1/bot/control`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ state: nextState }),
-    });
-    if (res.ok) {
-      setPortfolio(await res.json());
+    const isCurrentlyRunning = portfolio.state === 'RUNNING' || portfolio.bot_state === 'RUNNING';
+    const nextState = isCurrentlyRunning ? 'PAUSED' : 'RUNNING';
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+
+    // Actualización optimista inmediata en UI para evitar parpadeos
+    setPortfolio((prev: any) => ({
+      ...prev,
+      state: nextState,
+      bot_state: nextState,
+    }));
+
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/bot/control`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ state: nextState, account_id: activeAccountId }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setPortfolio(updated);
+      }
+    } catch {
+      await fetchOverview();
     }
   }
 
   async function toggleTradingMode() {
     const nextMode = portfolio.trading_mode === 'futures' ? 'spot' : 'futures';
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    setPortfolio((prev: any) => ({ ...prev, trading_mode: nextMode }));
     const res = await fetch(`${API_BASE}/api/v1/bot/control`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ trading_mode: nextMode }),
+      headers,
+      body: JSON.stringify({ trading_mode: nextMode, account_id: activeAccountId }),
     });
     if (res.ok) {
       setPortfolio(await res.json());
@@ -508,10 +536,13 @@ export default function App() {
   }
 
   async function handleStrategyChange(newStrat: string) {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    setPortfolio((prev: any) => ({ ...prev, active_strategy: newStrat }));
     const res = await fetch(`${API_BASE}/api/v1/bot/control`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ active_strategy: newStrat }),
+      headers,
+      body: JSON.stringify({ active_strategy: newStrat, account_id: activeAccountId }),
     });
     if (res.ok) {
       setPortfolio(await res.json());
@@ -567,7 +598,7 @@ export default function App() {
           'Content-Type': 'application/json',
           ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         },
-        body: JSON.stringify({ state: 'RUNNING', dry_run: config.dryRun }),
+        body: JSON.stringify({ state: 'RUNNING', dry_run: config.dryRun, account_id: activeAccountId }),
       });
       await fetchOverview();
     } catch {}
@@ -735,12 +766,12 @@ export default function App() {
             <button
               onClick={toggleBotState}
               className={`h-8 sm:h-9 px-2.5 sm:px-3 rounded-xl text-xs font-bold font-heading transition cursor-pointer flex items-center gap-1.5 ${
-                portfolio.state === 'RUNNING'
+                (portfolio.state === 'RUNNING' || portfolio.bot_state === 'RUNNING')
                   ? 'figma-btn-primary text-white shadow-[0_0_12px_rgba(10,124,255,0.3)]'
                   : 'bg-[#FF3B69]/15 text-[#FF3B69] border border-[#FF3B69]/35 hover:bg-[#FF3B69]/25'
               }`}
             >
-              {portfolio.state === 'RUNNING' ? (
+              {(portfolio.state === 'RUNNING' || portfolio.bot_state === 'RUNNING') ? (
                 <>
                   <Pause className="w-3.5 h-3.5 fill-current" />
                   <span className="hidden sm:inline">ACTIVO</span>
